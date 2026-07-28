@@ -71,28 +71,39 @@ async function EntryBody({
     <article>
       <header className="mb-8 border-b pb-6">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-wrap items-baseline gap-4">
-            <RubyWord
-              segments={entry.ruby}
-              fallback={headword}
-              className="text-5xl leading-tight"
-            />
+          <RubyWord
+            segments={entry.ruby}
+            fallback={headword}
+            className="text-5xl leading-tight"
+          />
+          {saveSlot}
+        </div>
+
+        {/*
+          The `common` badge rides the reading line rather than sitting beside
+          the headword: baseline-aligning a badge against 5xl text with furigana
+          above it leaves it stranded in the gap. Here it reads as what it is —
+          entry-level metadata, alongside the kana and romaji — and matches the
+          order <WordItem> uses in result rows.
+        */}
+        {(primaryReading || entry.isCommon) && (
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+            {primaryReading && (
+              <>
+                <span className="text-lg text-muted-foreground">
+                  {primaryReading.kana}
+                </span>
+                <span className="font-mono text-sm text-muted-foreground">
+                  {primaryReading.romaji}
+                </span>
+              </>
+            )}
             {entry.isCommon && (
               <Badge variant="outline" className="text-muted-foreground">
                 common
               </Badge>
             )}
           </div>
-          {saveSlot}
-        </div>
-
-        {primaryReading && (
-          <p className="mt-3 text-lg text-muted-foreground">
-            {primaryReading.kana}
-            <span className="ml-3 font-mono text-sm text-muted-foreground">
-              {primaryReading.romaji}
-            </span>
-          </p>
         )}
 
         {(entry.kanji.length > 1 || entry.readings.length > 1) && (
