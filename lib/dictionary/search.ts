@@ -21,6 +21,10 @@ export type SearchResult = {
 
 const LIMIT = 50;
 
+/** `search_terms.term_type` values each script may match against. */
+const JAPANESE_TERMS = ["kanji", "kana"] as const;
+const LATIN_TERMS = ["romaji"] as const;
+
 type SearchRow = {
   entry_id: string | number;
   headword: string;
@@ -94,38 +98,35 @@ export async function searchEntries(rawQuery: string): Promise<SearchResult[]> {
     `);
 
     const results = toResults(rows.rows as SearchRow[]);
-    return results.length > 0 ? results : fuzzy(term);
+    return results.length > 0 ? results : fuzzy(term, JAPANESE_TERMS);
   }
 
-  // Latin input is ambiguous — it could be romaji or an English gloss, so try
-  // both and rank romaji hits above gloss hits.
+  /*
+   * Latin input is ambiguous — it could be romaji or an English gloss, so try
+   * both and rank romaji hits above gloss hits.
+   *
+   * Both arms match strictly: romaji by equality, English by whole word
+   * against the unstemmed `simple` tsvector. A prefix match here would mean
+   * the English word "man" pulling in まんが and まんなか ahead of anything
+   * that means "man", which is noise rather than a longer list.
+   */
   const romaji = normalizeRomaji(rawQuery);
-  const prefix = escapeLikePrefix(romaji);
   const english = rawQuery.trim();
 
   const rows = await db.execute<SearchRow>(sql`
     WITH romaji_hits AS (
-      SELECT
-        st.entry_id,
-        0 AS source,
-        bool_or(st.term = ${romaji}) AS exact,
-        min(length(st.term)) AS len
+      SELECT DISTINCT st.entry_id, 0 AS source
       FROM search_terms st
-      WHERE st.term LIKE ${prefix} ESCAPE '\\'
+      WHERE st.term = ${romaji}
         AND st.term_type = 'romaji'
-      GROUP BY st.entry_id
     ),
     gloss_hits AS (
-      SELECT
-        es.entry_id,
-        1 AS source,
-        false AS exact,
-        0 AS len
+      SELECT es.entry_id, 1 AS source
       FROM entry_search es
-      WHERE es.gloss_tsv @@ plainto_tsquery('english', ${english})
+      WHERE es.gloss_tsv @@ plainto_tsquery('simple', ${english})
     ),
     merged AS (
-      SELECT DISTINCT ON (entry_id) entry_id, source, exact, len
+      SELECT DISTINCT ON (entry_id) entry_id, source
       FROM (SELECT * FROM romaji_hits UNION ALL SELECT * FROM gloss_hits) u
       ORDER BY entry_id, source ASC
     )
@@ -139,26 +140,44 @@ export async function searchEntries(rawQuery: string): Promise<SearchResult[]> {
     FROM merged m
     JOIN entry_search es ON es.entry_id = m.entry_id
     ORDER BY
-      m.exact DESC,
       m.source ASC,
       es.is_common DESC,
-      es.freq_rank ASC NULLS LAST,
-      m.len ASC
+      es.freq_rank ASC NULLS LAST
     LIMIT ${LIMIT}
   `);
 
   const results = toResults(rows.rows as SearchRow[]);
-  return results.length > 0 ? results : fuzzy(romaji);
+  return results.length > 0 ? results : fuzzy(romaji, LATIN_TERMS);
 }
 
 /**
- * Typo-tolerant fallback, only reached when an exact prefix search found
+ * Typo-tolerant fallback, only reached when the strict search above found
  * nothing. Uses the pg_trgm similarity index on `search_terms.term`.
+ *
+ * `types` keeps the fallback inside the script that was actually typed —
+ * trigram-matching ねこ against romaji terms, or an English query against
+ * kanji, only produces coincidences.
+ *
+ * Now that romaji is matched exactly, this is also what catches a partial
+ * reading: `tabe` no longer prefix-matches `taberu`, but is similar enough to
+ * arrive here.
  */
-async function fuzzy(term: string): Promise<SearchResult[]> {
+async function fuzzy(
+  term: string,
+  types: readonly string[],
+): Promise<SearchResult[]> {
   "use cache";
   cacheLife("max");
   cacheTag("dictionary");
+
+  // `types` has to stay a plain array: it is part of the `use cache` key, so it
+  // must be serializable. Drizzle spreads an interpolated array into one
+  // placeholder per element rather than binding it as a Postgres array, so
+  // build the IN list explicitly.
+  const typeList = sql.join(
+    types.map((t) => sql`${t}`),
+    sql`, `,
+  );
 
   const rows = await db.execute<SearchRow>(sql`
     SELECT
@@ -171,6 +190,7 @@ async function fuzzy(term: string): Promise<SearchResult[]> {
     FROM search_terms st
     JOIN entry_search es ON es.entry_id = st.entry_id
     WHERE st.term % ${term}
+      AND st.term_type IN (${typeList})
     GROUP BY es.entry_id, es.headword, es.reading, es.romaji,
              es.gloss_summary, es.is_common, es.freq_rank
     ORDER BY

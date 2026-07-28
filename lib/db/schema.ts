@@ -209,8 +209,14 @@ export const entrySearch = pgTable(
     glossBlob: text("gloss_blob").notNull(),
     isCommon: boolean("is_common").notNull().default(false),
     freqRank: integer("freq_rank"),
+    /*
+     * `simple`, not `english`: it lowercases and splits on word boundaries but
+     * does not stem, so a search for "run" finds "to run" without also
+     * dragging in "running" and "runner". Looking up a dictionary is a lookup,
+     * not a relevance ranking — the word you typed is the word you meant.
+     */
     glossTsv: tsvector("gloss_tsv").generatedAlwaysAs(
-      (): SQL => sql`to_tsvector('english', ${entrySearch.glossBlob})`,
+      (): SQL => sql`to_tsvector('simple', ${entrySearch.glossBlob})`,
     ),
   },
   (t) => [

@@ -34,11 +34,12 @@ async function main() {
     );
     console.log("  " + planText.split("\n")[0]);
 
-    // The four documented search paths, all expected to reach 猫 (entry 1467640).
+    // The documented search paths, all expected to reach 猫 (entry 1467640).
+    // Japanese stays a prefix search; romaji is matched exactly.
     const NEKO = 1467640;
     const probes: Array<[string, string]> = [
       ["kanji/kana prefix", `st.term LIKE 'ねこ%' AND st.term_type IN ('kanji','kana')`],
-      ["romaji", `st.term LIKE 'neko%' AND st.term_type = 'romaji'`],
+      ["romaji exact", `st.term = 'neko' AND st.term_type = 'romaji'`],
     ];
     for (const [label, where] of probes) {
       const { rows } = await client.query(
@@ -55,19 +56,47 @@ async function main() {
       SELECT count(*)::int AS total,
              count(*) FILTER (WHERE entry_id = ${NEKO})::int AS hit
       FROM entry_search
-      WHERE gloss_tsv @@ plainto_tsquery('english', 'cat')
+      WHERE gloss_tsv @@ plainto_tsquery('simple', 'cat')
     `);
     console.log(
-      `english gloss FTS "cat": ${gloss[0].total} matches, 猫 present: ${gloss[0].hit > 0 ? "OK" : "FAIL"}`,
+      `gloss FTS "cat": ${gloss[0].total} matches, 猫 present: ${gloss[0].hit > 0 ? "OK" : "FAIL"}`,
     );
 
+    /*
+     * Strictness is the point, so assert what must NOT match. If `gloss_tsv`
+     * were still built with the `english` config, "cats" would stem to "cat"
+     * and reach 猫; if romaji were still a prefix search, "nek" would too.
+     */
+    const negatives: Array<[string, string]> = [
+      [
+        `gloss FTS "cats" (stemming off)`,
+        `SELECT count(*)::int AS n FROM entry_search
+         WHERE entry_id = ${NEKO} AND gloss_tsv @@ plainto_tsquery('simple', 'cats')`,
+      ],
+      [
+        `romaji "nek" (prefix off)`,
+        `SELECT count(*)::int AS n FROM search_terms
+         WHERE term = 'nek' AND term_type = 'romaji'`,
+      ],
+    ];
+    for (const [label, query] of negatives) {
+      const { rows } = await client.query(query);
+      console.log(
+        `${label}: ${rows[0].n} matches`,
+        rows[0].n === 0 ? "OK" : "FAIL — expected none",
+      );
+    }
+
+    // The fallback is scoped to the script that was typed, so a latin typo only
+    // trigram-matches romaji terms.
     const { rows: fuzzy } = await client.query(`
-      SELECT count(DISTINCT entry_id)::int AS total
-      FROM search_terms WHERE term % 'nekko'
+      SELECT count(DISTINCT entry_id)::int AS total,
+             count(*) FILTER (WHERE entry_id = ${NEKO})::int AS hit
+      FROM search_terms WHERE term % 'nekko' AND term_type = 'romaji'
     `);
     console.log(
-      `trigram fallback "nekko": ${fuzzy[0].total} entries`,
-      fuzzy[0].total > 0 ? "OK" : "FAIL",
+      `trigram fallback "nekko": ${fuzzy[0].total} entries, 猫 present:`,
+      fuzzy[0].hit > 0 ? "OK" : "FAIL",
     );
 
     const { rows: furi } = await client.query(

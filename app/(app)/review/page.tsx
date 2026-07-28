@@ -1,13 +1,22 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { SparklesIcon } from "lucide-react";
 
 import { getFrontMode, getReviewCards } from "@/lib/user-words/queries";
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Flashcards } from "./flashcards";
 
 function ReviewSkeleton() {
-  return (
-    <div className="h-72 animate-pulse rounded-xl bg-muted" />
-  );
+  return <Skeleton className="h-72 rounded-xl" />;
 }
 
 async function Session() {
@@ -19,18 +28,26 @@ async function Session() {
 
   if (cards.length === 0) {
     return (
-      <div className="rounded-xl border py-16 text-center">
-        <p className="text-lg">Nothing left to review.</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Every saved word is marked learned.
-        </p>
-        <Link
-          href="/search"
-          className="mt-4 inline-block text-sm underline underline-offset-4"
-        >
-          Find more words
-        </Link>
-      </div>
+      <Empty className="border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <SparklesIcon />
+          </EmptyMedia>
+          <EmptyTitle>Nothing left to review</EmptyTitle>
+          <EmptyDescription>
+            Every saved word is marked learned.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/search" />}
+          >
+            Find more words
+          </Button>
+        </EmptyContent>
+      </Empty>
     );
   }
 

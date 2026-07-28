@@ -5,28 +5,23 @@ import { useOptimistic, useTransition } from "react";
 import { addWord, removeWord } from "@/app/actions/words";
 import { Button } from "@/components/ui/button";
 
-/**
- * Toggles a word in and out of the user's list.
- *
- * `useOptimistic` flips the label immediately so the button feels instant; the
- * server action's `refresh()` reconciles it, and React rolls the optimistic
- * value back on its own if the action throws.
- */
 export function SaveButton({
   entryId,
   saved,
-}: {
+  size = "xs",
+}: Readonly<{
   entryId: number;
   saved: boolean;
-}) {
+  size?: React.ComponentProps<typeof Button>["size"];
+}>) {
   const [optimisticSaved, setOptimisticSaved] = useOptimistic(saved);
   const [pending, startTransition] = useTransition();
 
   return (
     <Button
       type="button"
-      variant={optimisticSaved ? "default" : "outline"}
-      size="xs"
+      variant={optimisticSaved ? "secondary" : "default"}
+      size={size}
       disabled={pending}
       aria-pressed={optimisticSaved}
       onClick={() => {

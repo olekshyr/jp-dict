@@ -3,7 +3,12 @@ import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 
+import {
+  NavigationMenu,
+  NavigationMenuList,
+} from "@/components/ui/navigation-menu";
 import { ThemeToggle } from "@/app/theme-toggle";
+import { NavLink } from "./nav-link";
 
 /**
  * Redirects signed-out users to the sign-in page.
@@ -42,17 +47,15 @@ export default function AppLayout({
           <Link href="/search" className="font-semibold tracking-tight">
             jp<span className="text-muted-foreground">-</span>dict
           </Link>
-          <div className="flex flex-1 items-center gap-4 text-sm">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
+          <NavigationMenu className="max-w-none flex-1 justify-start">
+            <NavigationMenuList className="justify-start gap-1">
+              {navLinks.map((link) => (
+                <NavLink key={link.href} href={link.href}>
+                  {link.label}
+                </NavLink>
+              ))}
+            </NavigationMenuList>
+          </NavigationMenu>
           <ThemeToggle />
           {/*
             UserButton is a Client Component that resolves auth on the client,

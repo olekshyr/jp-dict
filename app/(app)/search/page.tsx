@@ -1,9 +1,19 @@
 import { Suspense } from "react";
-import Link from "next/link";
+import { SearchIcon, SearchXIcon } from "lucide-react";
 
 import { searchEntries } from "@/lib/dictionary/search";
 import { getSavedEntryIds } from "@/lib/user-words/queries";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { ItemGroup } from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SaveButton } from "../save-button";
+import { WordItem } from "../word-item";
 import { SearchBox, SearchBoxFallback } from "./search-box";
 
 /**
@@ -22,14 +32,11 @@ export const unstable_instant = {
 
 function ResultsSkeleton() {
   return (
-    <ul className="space-y-3">
+    <ItemGroup>
       {[0, 1, 2, 3, 4].map((i) => (
-        <li
-          key={i}
-          className="h-20 animate-pulse rounded-lg bg-muted"
-        />
+        <Skeleton key={i} className="h-20 rounded-md" />
       ))}
-    </ul>
+    </ItemGroup>
   );
 }
 
@@ -42,9 +49,17 @@ async function Results({
 
   if (q.trim().length === 0) {
     return (
-      <p className="text-muted-foreground">
-        Search by kanji (猫), kana (ねこ), romaji (neko) or English (cat).
-      </p>
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <SearchIcon />
+          </EmptyMedia>
+          <EmptyTitle>Look something up</EmptyTitle>
+          <EmptyDescription>
+            Search by kanji (猫), kana (ねこ), romaji (neko) or English (cat).
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -59,9 +74,17 @@ async function Results({
 
   if (results.length === 0) {
     return (
-      <p className="text-muted-foreground">
-        No matches for <span className="font-medium">{q}</span>.
-      </p>
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <SearchXIcon />
+          </EmptyMedia>
+          <EmptyTitle>No matches for “{q}”</EmptyTitle>
+          <EmptyDescription>
+            Try a different spelling, or search the English meaning instead.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -71,40 +94,24 @@ async function Results({
         {results.length === 50 ? "Top 50 matches" : `${results.length} matches`}{" "}
         for <span className="font-medium">{q}</span>
       </p>
-      <ul className="space-y-2">
+      <ItemGroup>
         {results.map((result) => (
-          <li
+          <WordItem
             key={result.entryId}
-            className="flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors hover:border-ring"
+            entryId={result.entryId}
+            headword={result.headword}
+            reading={result.reading}
+            romaji={result.romaji}
+            glossSummary={result.glossSummary}
+            isCommon={result.isCommon}
           >
-            <Link href={`/entry/${result.entryId}`} className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="text-2xl">{result.headword}</span>
-                {result.reading !== result.headword && (
-                  <span className="text-muted-foreground">
-                    {result.reading}
-                  </span>
-                )}
-                <span className="font-mono text-xs text-muted-foreground">
-                  {result.romaji}
-                </span>
-                {result.isCommon && (
-                  <span className="rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    common
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                {result.glossSummary}
-              </p>
-            </Link>
             <SaveButton
               entryId={result.entryId}
               saved={savedIds.has(result.entryId)}
             />
-          </li>
+          </WordItem>
         ))}
-      </ul>
+      </ItemGroup>
     </>
   );
 }

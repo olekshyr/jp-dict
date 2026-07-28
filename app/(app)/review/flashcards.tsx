@@ -5,16 +5,17 @@ import Link from "next/link";
 
 import { setFrontMode, setStatus } from "@/app/actions/words";
 import { Button } from "@/components/ui/button";
-import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group";
+import {
+  Empty,
+  EmptyContent,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { CheckCheckIcon } from "lucide-react";
 import type { Card, FrontMode } from "@/lib/user-words/queries";
 import type { RubySegment } from "@/lib/db/schema";
-
-const MODES: Array<{ value: FrontMode; label: string }> = [
-  { value: "kanji", label: "Kanji" },
-  { value: "furigana", label: "Furigana" },
-  { value: "romaji", label: "Romaji" },
-  { value: "english", label: "English" },
-];
+import { FrontModeTabs } from "./front-mode-tabs";
 
 function Ruby({ segments, fallback }: { segments: RubySegment[] | null; fallback: string }) {
   if (!segments || segments.length === 0) return <>{fallback}</>;
@@ -98,42 +99,38 @@ export function Flashcards({
 
   if (!card) {
     return (
-      <div className="rounded-xl border py-16 text-center">
-        <p className="text-lg">Session complete.</p>
-        <Link
-          href="/list"
-          className="mt-4 inline-block text-sm underline underline-offset-4"
-        >
-          Back to my list
-        </Link>
-      </div>
+      <Empty className="border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <CheckCheckIcon />
+          </EmptyMedia>
+          <EmptyTitle>Session complete</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/list" />}
+          >
+            Back to my list
+          </Button>
+        </EmptyContent>
+      </Empty>
     );
   }
 
   return (
     <div>
-      <ButtonGroup className="mb-6">
-        <ButtonGroupText className="text-muted-foreground">
-          Front:
-        </ButtonGroupText>
-        {MODES.map((m) => (
-          <Button
-            key={m.value}
-            type="button"
-            variant={mode === m.value ? "default" : "outline"}
-            size="sm"
-            onClick={() => {
-              startTransition(async () => {
-                setMode(m.value);
-                setFlipped(false);
-                await setFrontMode(m.value);
-              });
-            }}
-          >
-            {m.label}
-          </Button>
-        ))}
-      </ButtonGroup>
+      <FrontModeTabs
+        mode={mode}
+        onModeChange={(next) => {
+          startTransition(async () => {
+            setMode(next);
+            setFlipped(false);
+            await setFrontMode(next);
+          });
+        }}
+      />
 
       <button
         type="button"
@@ -152,7 +149,9 @@ export function Flashcards({
         {flipped ? "Tap to hide" : "Tap to reveal"} · {remaining.length} left
       </p>
 
-      <ButtonGroup className="mx-auto mt-6">
+      {/* Deliberately not a ButtonGroup: these are opposing choices, not one
+          segmented control, so they read better as two separate buttons. */}
+      <div className="mt-6 flex justify-center gap-3">
         <Button type="button" variant="outline" onClick={advance}>
           Skip
         </Button>
@@ -170,7 +169,7 @@ export function Flashcards({
         >
           I know this
         </Button>
-      </ButtonGroup>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 
 import { getCommonEntryIds, getEntry } from "@/lib/dictionary/entry";
 import { describeTag } from "@/lib/dictionary/tags";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EntrySaveButton } from "./entry-save-button";
 import { RubyWord } from "./ruby-word";
 
 /**
@@ -31,19 +34,27 @@ function TagList({ tags }: { tags: string[] }) {
   return (
     <>
       {tags.map((tag) => (
-        <span
-          key={tag}
-          title={describeTag(tag)}
-          className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
-        >
+        <Badge key={tag} variant="secondary" className="text-muted-foreground">
           {describeTag(tag)}
-        </span>
+        </Badge>
       ))}
     </>
   );
 }
 
-async function EntryBody({ id }: { id: string }) {
+/**
+ * `saveSlot` is a pass-through slot, not data. Nothing in this body reads it, so
+ * it never becomes part of the cache entry — the cached markup keeps a hole that
+ * the caller's own <Suspense> fills at request time. That is what lets a
+ * per-user control sit inside markup shared by every user.
+ */
+async function EntryBody({
+  id,
+  saveSlot,
+}: {
+  id: string;
+  saveSlot: React.ReactNode;
+}) {
   "use cache";
 
   const entryId = Number(id);
@@ -58,17 +69,20 @@ async function EntryBody({ id }: { id: string }) {
   return (
     <article>
       <header className="mb-8 border-b pb-6">
-        <div className="flex flex-wrap items-baseline gap-4">
-          <RubyWord
-            segments={entry.ruby}
-            fallback={headword}
-            className="text-5xl leading-tight"
-          />
-          {entry.isCommon && (
-            <span className="rounded border px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              common
-            </span>
-          )}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-baseline gap-4">
+            <RubyWord
+              segments={entry.ruby}
+              fallback={headword}
+              className="text-5xl leading-tight"
+            />
+            {entry.isCommon && (
+              <Badge variant="outline" className="text-muted-foreground">
+                common
+              </Badge>
+            )}
+          </div>
+          {saveSlot}
         </div>
 
         {primaryReading && (
@@ -135,11 +149,7 @@ export default function EntryPage({
   params: Promise<{ id: string }>;
 }) {
   return (
-    <Suspense
-      fallback={
-        <div className="h-64 animate-pulse rounded-lg bg-muted" />
-      }
-    >
+    <Suspense fallback={<Skeleton className="h-64 rounded-lg" />}>
       {/*
         `params` is resolved inline rather than awaited in this component.
         Awaiting it here would suspend the page itself, pulling the whole route
@@ -148,7 +158,27 @@ export default function EntryPage({
         string so it stays part of the `use cache` key.
       */}
       {params.then(({ id }) => (
-        <EntryBody id={id} />
+        <EntryBody
+          id={id}
+          saveSlot={
+            /*
+              Its own boundary, outside the cached body: reading whether this
+              user saved the entry is request-time work, and doing it inline
+              would make the shared entry markup unshareable.
+            */
+            <Suspense
+              // Explicit `key` because this element is built here as a prop and
+              // only lands among <div>'s children inside the cached body. React
+              // marks elements written as literal JSX children as key-checked;
+              // one that arrives across the cache boundary misses that pass and
+              // gets reported as an unkeyed list child.
+              key="save"
+              fallback={<Skeleton className="h-9 w-[4.5rem] rounded-md" />}
+            >
+              <EntrySaveButton id={id} />
+            </Suspense>
+          }
+        />
       ))}
     </Suspense>
   );
