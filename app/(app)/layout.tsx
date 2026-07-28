@@ -3,6 +3,8 @@ import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 
+import { ThemeToggle } from "@/app/theme-toggle";
+
 /**
  * Redirects signed-out users to the sign-in page.
  *
@@ -35,22 +37,23 @@ export default function AppLayout({
         <AuthGate />
       </Suspense>
 
-      <header className="border-b border-zinc-200 dark:border-zinc-800">
+      <header className="border-b">
         <nav className="mx-auto flex w-full max-w-4xl items-center gap-6 px-4 py-3">
           <Link href="/search" className="font-semibold tracking-tight">
-            jp<span className="text-zinc-400">-</span>dict
+            jp<span className="text-muted-foreground">-</span>dict
           </Link>
           <div className="flex flex-1 items-center gap-4 text-sm">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                className="text-muted-foreground transition-colors hover:text-foreground"
               >
                 {link.label}
               </Link>
             ))}
           </div>
+          <ThemeToggle />
           {/*
             UserButton is a Client Component that resolves auth on the client,
             so it stays in the static shell and needs no Suspense boundary.

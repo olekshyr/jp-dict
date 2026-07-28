@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+import { ThemeScript } from "./theme-script";
+
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,15 +30,20 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable)}
+      // ThemeScript adds the `dark` class here before React hydrates.
+      suppressHydrationWarning
     >
+      <head>
+        <ThemeScript />
+      </head>
       {/*
         ClerkProvider must be INSIDE <body>, not wrapping <html>. With
         `cacheComponents: true` the provider reads request data, and wrapping
         <html> pulls the whole document out of the static shell with an
         "Uncached data was accessed outside of <Suspense>" error.
       */}
-      <body className="min-h-full flex flex-col bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <body className="min-h-full flex flex-col">
         <ClerkProvider>{children}</ClerkProvider>
       </body>
     </html>

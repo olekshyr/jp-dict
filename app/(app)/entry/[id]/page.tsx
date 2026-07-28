@@ -26,7 +26,7 @@ export async function generateStaticParams() {
   return ids.map((id) => ({ id: String(id) }));
 }
 
-function TagList({ tags, tone }: { tags: string[]; tone: string }) {
+function TagList({ tags }: { tags: string[] }) {
   if (tags.length === 0) return null;
   return (
     <>
@@ -34,7 +34,7 @@ function TagList({ tags, tone }: { tags: string[]; tone: string }) {
         <span
           key={tag}
           title={describeTag(tag)}
-          className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${tone}`}
+          className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
         >
           {describeTag(tag)}
         </span>
@@ -57,7 +57,7 @@ async function EntryBody({ id }: { id: string }) {
 
   return (
     <article>
-      <header className="mb-8 border-b border-zinc-200 pb-6 dark:border-zinc-800">
+      <header className="mb-8 border-b pb-6">
         <div className="flex flex-wrap items-baseline gap-4">
           <RubyWord
             segments={entry.ruby}
@@ -65,23 +65,23 @@ async function EntryBody({ id }: { id: string }) {
             className="text-5xl leading-tight"
           />
           {entry.isCommon && (
-            <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+            <span className="rounded border px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               common
             </span>
           )}
         </div>
 
         {primaryReading && (
-          <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
+          <p className="mt-3 text-lg text-muted-foreground">
             {primaryReading.kana}
-            <span className="ml-3 font-mono text-sm text-zinc-400">
+            <span className="ml-3 font-mono text-sm text-muted-foreground">
               {primaryReading.romaji}
             </span>
           </p>
         )}
 
         {(entry.kanji.length > 1 || entry.readings.length > 1) && (
-          <dl className="mt-4 space-y-1 text-sm text-zinc-500">
+          <dl className="mt-4 space-y-1 text-sm text-muted-foreground">
             {entry.kanji.length > 1 && (
               <div className="flex gap-2">
                 <dt className="shrink-0">Other forms</dt>
@@ -103,33 +103,23 @@ async function EntryBody({ id }: { id: string }) {
       <ol className="space-y-6">
         {entry.senses.map((sense, i) => (
           <li key={i} className="flex gap-4">
-            <span className="mt-0.5 w-6 shrink-0 text-right text-sm text-zinc-400">
+            <span className="mt-0.5 w-6 shrink-0 text-right text-sm text-muted-foreground">
               {i + 1}.
             </span>
             <div className="flex-1">
               <div className="mb-1.5 flex flex-wrap gap-1.5">
-                <TagList
-                  tags={sense.pos}
-                  tone="bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
-                />
-                <TagList
-                  tags={sense.misc}
-                  tone="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                />
-                <TagList
-                  tags={sense.field}
-                  tone="bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300"
-                />
-                <TagList
-                  tags={sense.dialect}
-                  tone="bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                />
+                <TagList tags={sense.pos} />
+                <TagList tags={sense.misc} />
+                <TagList tags={sense.field} />
+                <TagList tags={sense.dialect} />
               </div>
               <p className="text-lg">
                 {sense.glosses.map((g) => g.text).join("; ")}
               </p>
               {sense.info && (
-                <p className="mt-1 text-sm italic text-zinc-500">{sense.info}</p>
+                <p className="mt-1 text-sm italic text-muted-foreground">
+                  {sense.info}
+                </p>
               )}
             </div>
           </li>
@@ -147,7 +137,7 @@ export default function EntryPage({
   return (
     <Suspense
       fallback={
-        <div className="h-64 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-900" />
+        <div className="h-64 animate-pulse rounded-lg bg-muted" />
       }
     >
       {/*

@@ -25,7 +25,9 @@ export function RubyWord({
       {segments.map((segment, i) => (
         <ruby key={i}>
           {segment.ruby}
-          <rt className="text-[0.4em] text-zinc-500">{segment.rt ?? ""}</rt>
+          <rt className="text-[0.4em] text-muted-foreground">
+            {segment.rt ?? ""}
+          </rt>
         </ruby>
       ))}
     </ruby>

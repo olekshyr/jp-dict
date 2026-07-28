@@ -26,7 +26,7 @@ function ResultsSkeleton() {
       {[0, 1, 2, 3, 4].map((i) => (
         <li
           key={i}
-          className="h-20 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-900"
+          className="h-20 animate-pulse rounded-lg bg-muted"
         />
       ))}
     </ul>
@@ -35,14 +35,14 @@ function ResultsSkeleton() {
 
 async function Results({
   searchParams,
-}: {
+}: Readonly<{
   searchParams: Promise<{ q?: string }>;
-}) {
+}>) {
   const { q = "" } = await searchParams;
 
   if (q.trim().length === 0) {
     return (
-      <p className="text-zinc-500">
+      <p className="text-muted-foreground">
         Search by kanji (猫), kana (ねこ), romaji (neko) or English (cat).
       </p>
     );
@@ -59,7 +59,7 @@ async function Results({
 
   if (results.length === 0) {
     return (
-      <p className="text-zinc-500">
+      <p className="text-muted-foreground">
         No matches for <span className="font-medium">{q}</span>.
       </p>
     );
@@ -67,7 +67,7 @@ async function Results({
 
   return (
     <>
-      <p className="mb-4 text-sm text-zinc-500">
+      <p className="mb-4 text-sm text-muted-foreground">
         {results.length === 50 ? "Top 50 matches" : `${results.length} matches`}{" "}
         for <span className="font-medium">{q}</span>
       </p>
@@ -75,24 +75,26 @@ async function Results({
         {results.map((result) => (
           <li
             key={result.entryId}
-            className="flex items-start gap-3 rounded-lg border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+            className="flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors hover:border-ring"
           >
             <Link href={`/entry/${result.entryId}`} className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="text-2xl">{result.headword}</span>
                 {result.reading !== result.headword && (
-                  <span className="text-zinc-500">{result.reading}</span>
+                  <span className="text-muted-foreground">
+                    {result.reading}
+                  </span>
                 )}
-                <span className="font-mono text-xs text-zinc-400">
+                <span className="font-mono text-xs text-muted-foreground">
                   {result.romaji}
                 </span>
                 {result.isCommon && (
-                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                  <span className="rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     common
                   </span>
                 )}
               </div>
-              <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                 {result.glossSummary}
               </p>
             </Link>
@@ -109,9 +111,9 @@ async function Results({
 
 export default function SearchPage({
   searchParams,
-}: {
+}: Readonly<{
   searchParams: Promise<{ q?: string }>;
-}) {
+}>) {
   return (
     <div>
       <h1 className="sr-only">Search the dictionary</h1>

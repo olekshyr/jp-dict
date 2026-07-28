@@ -11,7 +11,7 @@ export default function SignInPage() {
     <div className="flex flex-1 items-center justify-center p-6">
       <Suspense
         fallback={
-          <div className="h-96 w-80 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
+          <div className="h-96 w-80 animate-pulse rounded-xl bg-muted" />
         }
       >
         <SignIn />

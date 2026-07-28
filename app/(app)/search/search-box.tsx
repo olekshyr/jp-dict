@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 
-const inputClass =
-  "w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base outline-none placeholder:text-zinc-400 focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-500";
+import { Input } from "@/components/ui/input";
+
+/** Search is the primary action on this page, so the field runs larger than the default. */
+const inputClass = "h-11 rounded-lg px-4 text-base md:text-base";
 
 /**
  * Static stand-in rendered while the seeded box streams in. Keeping the markup
@@ -14,7 +15,7 @@ const inputClass =
 export function SearchBoxFallback() {
   return (
     <div className="mb-8">
-      <input
+      <Input
         className={inputClass}
         placeholder="Search 猫, ねこ, neko or cat…"
         aria-label="Search the dictionary"
@@ -28,27 +29,23 @@ export function SearchBox() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get("q") ?? "";
-  const [value, setValue] = useState(urlQuery);
-
-  // Keep the box in step with back/forward navigation.
-  useEffect(() => {
-    setValue(urlQuery);
-  }, [urlQuery]);
 
   return (
     <form
       className="mb-8"
       onSubmit={(event) => {
         event.preventDefault();
-        const next = value.trim();
+        const next = String(new FormData(event.currentTarget).get("q") ?? "").trim();
         router.push(next ? `/search?q=${encodeURIComponent(next)}` : "/search");
       }}
     >
-      <input
+      <Input
+        // Remounting on a new URL query keeps the box in step with back/forward
+        // navigation without an effect that would re-render on every keystroke.
+        key={urlQuery}
         className={inputClass}
         name="q"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
+        defaultValue={urlQuery}
         placeholder="Search 猫, ねこ, neko or cat…"
         aria-label="Search the dictionary"
         autoComplete="off"

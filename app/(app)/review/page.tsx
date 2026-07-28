@@ -6,7 +6,7 @@ import { Flashcards } from "./flashcards";
 
 function ReviewSkeleton() {
   return (
-    <div className="h-72 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
+    <div className="h-72 animate-pulse rounded-xl bg-muted" />
   );
 }
 
@@ -19,9 +19,9 @@ async function Session() {
 
   if (cards.length === 0) {
     return (
-      <div className="rounded-xl border border-zinc-200 py-16 text-center dark:border-zinc-800">
+      <div className="rounded-xl border py-16 text-center">
         <p className="text-lg">Nothing left to review.</p>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           Every saved word is marked learned.
         </p>
         <Link

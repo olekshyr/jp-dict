@@ -4,6 +4,8 @@ import { useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 
 import { setFrontMode, setStatus } from "@/app/actions/words";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group";
 import type { Card, FrontMode } from "@/lib/user-words/queries";
 import type { RubySegment } from "@/lib/db/schema";
 
@@ -21,7 +23,9 @@ function Ruby({ segments, fallback }: { segments: RubySegment[] | null; fallback
       {segments.map((segment, i) => (
         <ruby key={i}>
           {segment.ruby}
-          <rt className="text-[0.35em] text-zinc-500">{segment.rt ?? ""}</rt>
+          <rt className="text-[0.35em] text-muted-foreground">
+            {segment.rt ?? ""}
+          </rt>
         </ruby>
       ))}
     </ruby>
@@ -53,16 +57,20 @@ function Back({ card, mode }: { card: Card; mode: FrontMode }) {
     return (
       <div className="space-y-2 text-center">
         <div className="text-5xl">{card.headword}</div>
-        <div className="text-lg text-zinc-500">{card.reading}</div>
-        <div className="font-mono text-sm text-zinc-400">{card.romaji}</div>
+        <div className="text-lg text-muted-foreground">{card.reading}</div>
+        <div className="font-mono text-sm text-muted-foreground">
+          {card.romaji}
+        </div>
       </div>
     );
   }
   return (
     <div className="space-y-2 text-center">
       <div className="text-xl">{card.glosses}</div>
-      <div className="text-zinc-500">{card.reading}</div>
-      <div className="font-mono text-sm text-zinc-400">{card.romaji}</div>
+      <div className="text-muted-foreground">{card.reading}</div>
+      <div className="font-mono text-sm text-muted-foreground">
+        {card.romaji}
+      </div>
     </div>
   );
 }
@@ -70,10 +78,10 @@ function Back({ card, mode }: { card: Card; mode: FrontMode }) {
 export function Flashcards({
   cards,
   initialMode,
-}: {
+}: Readonly<{
   cards: Card[];
   initialMode: FrontMode;
-}) {
+}>) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mode, setMode] = useOptimistic(initialMode);
@@ -90,7 +98,7 @@ export function Flashcards({
 
   if (!card) {
     return (
-      <div className="rounded-xl border border-zinc-200 py-16 text-center dark:border-zinc-800">
+      <div className="rounded-xl border py-16 text-center">
         <p className="text-lg">Session complete.</p>
         <Link
           href="/list"
@@ -104,12 +112,16 @@ export function Flashcards({
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center gap-1">
-        <span className="mr-2 text-sm text-zinc-500">Front:</span>
+      <ButtonGroup className="mb-6">
+        <ButtonGroupText className="text-muted-foreground">
+          Front:
+        </ButtonGroupText>
         {MODES.map((m) => (
-          <button
+          <Button
             key={m.value}
             type="button"
+            variant={mode === m.value ? "default" : "outline"}
+            size="sm"
             onClick={() => {
               startTransition(async () => {
                 setMode(m.value);
@@ -117,22 +129,17 @@ export function Flashcards({
                 await setFrontMode(m.value);
               });
             }}
-            className={`rounded-md px-2.5 py-1 text-sm transition-colors ${
-              mode === m.value
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-            }`}
           >
             {m.label}
-          </button>
+          </Button>
         ))}
-      </div>
+      </ButtonGroup>
 
       <button
         type="button"
         onClick={() => setFlipped((f) => !f)}
         aria-label={flipped ? "Show front" : "Reveal answer"}
-        className="flex min-h-64 w-full items-center justify-center rounded-xl border border-zinc-200 p-8 transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+        className="flex min-h-64 w-full items-center justify-center rounded-xl border p-8 transition-colors hover:border-ring"
       >
         {flipped ? (
           <Back card={card} mode={mode} />
@@ -141,19 +148,15 @@ export function Flashcards({
         )}
       </button>
 
-      <p className="mt-3 text-center text-sm text-zinc-400">
+      <p className="mt-3 text-center text-sm text-muted-foreground">
         {flipped ? "Tap to hide" : "Tap to reveal"} · {remaining.length} left
       </p>
 
-      <div className="mt-6 flex justify-center gap-3">
-        <button
-          type="button"
-          onClick={advance}
-          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium transition-colors hover:border-zinc-500 dark:border-zinc-700"
-        >
+      <ButtonGroup className="mx-auto mt-6">
+        <Button type="button" variant="outline" onClick={advance}>
           Skip
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={() => {
             const id = card.entryId;
@@ -164,11 +167,10 @@ export function Flashcards({
               await setStatus(id, "learned");
             });
           }}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
         >
           I know this
-        </button>
-      </div>
+        </Button>
+      </ButtonGroup>
     </div>
   );
 }

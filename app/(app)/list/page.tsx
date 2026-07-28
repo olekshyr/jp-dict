@@ -6,7 +6,9 @@ import {
   getMyWords,
   type WordStatus,
 } from "@/lib/user-words/queries";
-import { SaveButton, StatusButton } from "../save-button";
+import { buttonVariants } from "@/components/ui/button";
+import { SaveButton } from "../save-button";
+import { StatusButton } from "../status-button";
 
 const FILTERS: Array<{ value: WordStatus | "all"; label: string }> = [
   { value: "todo", label: "To learn" },
@@ -24,7 +26,7 @@ function ListSkeleton() {
       {[0, 1, 2, 3].map((i) => (
         <li
           key={i}
-          className="h-20 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-900"
+          className="h-20 animate-pulse rounded-lg bg-muted"
         />
       ))}
     </ul>
@@ -33,9 +35,9 @@ function ListSkeleton() {
 
 async function WordList({
   searchParams,
-}: {
+}: Readonly<{
   searchParams: Promise<{ filter?: string }>;
-}) {
+}>) {
   const { filter: rawFilter } = await searchParams;
   const filter = parseFilter(rawFilter);
 
@@ -57,21 +59,20 @@ async function WordList({
             <Link
               key={f.value}
               href={`/list?filter=${f.value}`}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                active
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-              }`}
+              className={buttonVariants({
+                variant: active ? "default" : "ghost",
+                size: "sm",
+              })}
             >
               {f.label}
-              <span className="ml-1.5 opacity-60">{count}</span>
+              <span className="opacity-60">{count}</span>
             </Link>
           );
         })}
       </div>
 
       {words.length === 0 ? (
-        <p className="text-zinc-500">
+        <p className="text-muted-foreground">
           Nothing here yet.{" "}
           <Link href="/search" className="underline underline-offset-4">
             Search for a word
@@ -83,7 +84,7 @@ async function WordList({
           {words.map((word) => (
             <li
               key={word.entryId}
-              className="flex items-start gap-3 rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800"
+              className="flex items-start gap-3 rounded-lg border px-4 py-3"
             >
               <Link
                 href={`/entry/${word.entryId}`}
@@ -92,13 +93,15 @@ async function WordList({
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="text-2xl">{word.headword}</span>
                   {word.reading !== word.headword && (
-                    <span className="text-zinc-500">{word.reading}</span>
+                    <span className="text-muted-foreground">
+                      {word.reading}
+                    </span>
                   )}
-                  <span className="font-mono text-xs text-zinc-400">
+                  <span className="font-mono text-xs text-muted-foreground">
                     {word.romaji}
                   </span>
                 </div>
-                <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                   {word.glossSummary}
                 </p>
               </Link>
