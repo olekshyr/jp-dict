@@ -5,6 +5,7 @@ import { getCommonEntryIds, getEntry } from "@/lib/dictionary/entry";
 import { describeTag } from "@/lib/dictionary/tags";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SearchField } from "../../search-field";
 import { EntrySaveButton } from "./entry-save-button";
 import { RubyWord } from "./ruby-word";
 
@@ -149,37 +150,47 @@ export default function EntryPage({
   params: Promise<{ id: string }>;
 }) {
   return (
-    <Suspense fallback={<Skeleton className="h-64 rounded-lg" />}>
+    <div>
       {/*
-        `params` is resolved inline rather than awaited in this component.
-        Awaiting it here would suspend the page itself, pulling the whole route
-        out of the static shell; resolving it inside the boundary keeps the
-        cached body as the only thing that has to wait, and hands it a plain
-        string so it stays part of the `use cache` key.
+        Looking the next word up shouldn't mean a detour via /search. Rendered
+        unseeded and outside the boundary below: an entry URL carries no query
+        to restore, so the field needs nothing from the request and stays in
+        this route's static shell, usable while the entry itself streams in.
       */}
-      {params.then(({ id }) => (
-        <EntryBody
-          id={id}
-          saveSlot={
-            /*
-              Its own boundary, outside the cached body: reading whether this
-              user saved the entry is request-time work, and doing it inline
-              would make the shared entry markup unshareable.
-            */
-            <Suspense
-              // Explicit `key` because this element is built here as a prop and
-              // only lands among <div>'s children inside the cached body. React
-              // marks elements written as literal JSX children as key-checked;
-              // one that arrives across the cache boundary misses that pass and
-              // gets reported as an unkeyed list child.
-              key="save"
-              fallback={<Skeleton className="h-9 w-[4.5rem] rounded-md" />}
-            >
-              <EntrySaveButton id={id} />
-            </Suspense>
-          }
-        />
-      ))}
-    </Suspense>
+      <SearchField />
+
+      <Suspense fallback={<Skeleton className="h-64 rounded-lg" />}>
+        {/*
+          `params` is resolved inline rather than awaited in this component.
+          Awaiting it here would suspend the page itself, pulling the whole route
+          out of the static shell; resolving it inside the boundary keeps the
+          cached body as the only thing that has to wait, and hands it a plain
+          string so it stays part of the `use cache` key.
+        */}
+        {params.then(({ id }) => (
+          <EntryBody
+            id={id}
+            saveSlot={
+              /*
+                Its own boundary, outside the cached body: reading whether this
+                user saved the entry is request-time work, and doing it inline
+                would make the shared entry markup unshareable.
+              */
+              <Suspense
+                // Explicit `key` because this element is built here as a prop
+                // and only lands among <div>'s children inside the cached body.
+                // React marks elements written as literal JSX children as
+                // key-checked; one that arrives across the cache boundary misses
+                // that pass and gets reported as an unkeyed list child.
+                key="save"
+                fallback={<Skeleton className="h-9 w-[4.5rem] rounded-md" />}
+              >
+                <EntrySaveButton id={id} />
+              </Suspense>
+            }
+          />
+        ))}
+      </Suspense>
+    </div>
   );
 }

@@ -13,8 +13,9 @@ import {
 import { ItemGroup } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SaveButton } from "../save-button";
+import { SearchField } from "../search-field";
 import { WordItem } from "../word-item";
-import { SearchBox, SearchBoxFallback } from "./search-box";
+import { SearchBox } from "./search-box";
 
 /**
  * Validates at dev and build time that the Suspense boundaries here still
@@ -130,7 +131,12 @@ export default function SearchPage({
         string; the results need a database round-trip. Splitting them lets the
         input become interactive without waiting on the query.
       */}
-      <Suspense fallback={<SearchBoxFallback />}>
+      <Suspense
+        // The fallback is the same field, inert: identical markup means the box
+        // is present in the prerendered HTML and does not shift when the seeded
+        // one takes over.
+        fallback={<SearchField disabled />}
+      >
         <SearchBox />
       </Suspense>
 
