@@ -29,10 +29,12 @@ export type RubySegment = { ruby: string; rt: string };
 /* ------------------------------------------------------------------ *
  * Dictionary — immutable, written only by scripts/import-jmdict.ts.
  *
- * Surrogate keys here are plain bigints assigned by the importer rather than
- * identity columns. Bulk loading ~1.5M rows otherwise means `RETURNING id` on
- * every batch just to link glosses to their sense; a counter in the script lets
- * every table be inserted as one flat batched pass.
+ * Most tables are keyed by their natural key — (entry_id, ord) or
+ * (sense_id, ord) — so the primary key is also the lookup index. The one
+ * surrogate key, senses.id, is a plain bigint assigned by the importer rather
+ * than an identity column: bulk loading ~1.5M rows otherwise means
+ * `RETURNING id` on every batch just to link glosses to their sense; a counter
+ * in the script lets every table be inserted as one flat batched pass.
  * ------------------------------------------------------------------ */
 
 export const entries = pgTable(
@@ -51,8 +53,6 @@ export const entries = pgTable(
 export const kanjiForms = pgTable(
   "kanji_forms",
   {
-    id: bigint("id", { mode: "number" })
-      .primaryKey(),
     entryId: bigint("entry_id", { mode: "number" })
       .notNull()
       .references(() => entries.id, { onDelete: "cascade" }),
@@ -62,14 +62,13 @@ export const kanjiForms = pgTable(
     /** Position within the entry; 0 is the headword. */
     ord: smallint("ord").notNull(),
   },
-  (t) => [index("kanji_forms_entry_idx").on(t.entryId)],
+  // The natural key doubles as the entry_id lookup index.
+  (t) => [primaryKey({ columns: [t.entryId, t.ord] })],
 );
 
 export const readings = pgTable(
   "readings",
   {
-    id: bigint("id", { mode: "number" })
-      .primaryKey(),
     entryId: bigint("entry_id", { mode: "number" })
       .notNull()
       .references(() => entries.id, { onDelete: "cascade" }),
@@ -84,7 +83,8 @@ export const readings = pgTable(
     isCommon: boolean("is_common").notNull().default(false),
     ord: smallint("ord").notNull(),
   },
-  (t) => [index("readings_entry_idx").on(t.entryId)],
+  // The natural key doubles as the entry_id lookup index.
+  (t) => [primaryKey({ columns: [t.entryId, t.ord] })],
 );
 
 export const senses = pgTable(
@@ -115,8 +115,6 @@ export const senses = pgTable(
 export const glosses = pgTable(
   "glosses",
   {
-    id: bigint("id", { mode: "number" })
-      .primaryKey(),
     senseId: bigint("sense_id", { mode: "number" })
       .notNull()
       .references(() => senses.id, { onDelete: "cascade" }),
@@ -127,7 +125,8 @@ export const glosses = pgTable(
     type: text("type"),
     ord: smallint("ord").notNull(),
   },
-  (t) => [index("glosses_sense_idx").on(t.senseId)],
+  // The natural key doubles as the sense_id lookup index.
+  (t) => [primaryKey({ columns: [t.senseId, t.ord] })],
 );
 
 /**
@@ -162,11 +161,14 @@ export const furigana = pgTable(
  * pgroonga nor pg_bigm. A `text_pattern_ops` btree serves `term LIKE 'ねこ%'`
  * exactly, which is how dictionary lookup actually works.
  */
+/*
+ * Deliberately has no primary key: rows are only ever bulk-loaded and truncated
+ * by the importer, nothing references them, and every lookup goes through the
+ * three indexes below. A surrogate id cost 22 MB doing nothing.
+ */
 export const searchTerms = pgTable(
   "search_terms",
   {
-    id: bigint("id", { mode: "number" })
-      .primaryKey(),
     entryId: bigint("entry_id", { mode: "number" })
       .notNull()
       .references(() => entries.id, { onDelete: "cascade" }),

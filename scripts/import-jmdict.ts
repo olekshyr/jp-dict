@@ -220,14 +220,12 @@ async function main() {
       "freq_rank",
     ]);
     const kanjiB = new Batcher(client, "kanji_forms", [
-      "id",
       "entry_id",
       "text",
       "is_common",
       "ord",
     ]);
     const readingsB = new Batcher(client, "readings", [
-      "id",
       "entry_id",
       "kana",
       "romaji",
@@ -247,7 +245,6 @@ async function main() {
       "info",
     ]);
     const glossesB = new Batcher(client, "glosses", [
-      "id",
       "sense_id",
       "text",
       "lang",
@@ -255,10 +252,8 @@ async function main() {
       "ord",
     ]);
 
-    let kanjiId = 0;
-    let readingId = 0;
+    // The one surrogate key left: glosses need it to reference their sense.
     let senseId = 0;
-    let glossId = 0;
     let entryCount = 0;
     let sensesWithoutPos = 0;
 
@@ -302,13 +297,12 @@ async function main() {
 
       entry.kanji.forEach((k, i) => {
         const p = summarizePriority(k.priority);
-        kanjiB.push([++kanjiId, entry.seq, k.text, p.isCommon, i]);
+        kanjiB.push([entry.seq, k.text, p.isCommon, i]);
       });
 
       entry.readings.forEach((r, i) => {
         const p = summarizePriority(r.priority);
         readingsB.push([
-          ++readingId,
           entry.seq,
           r.kana,
           toRomaji(r.kana),
@@ -333,7 +327,7 @@ async function main() {
           s.info,
         ]);
         s.glosses.forEach((g, gi) => {
-          glossesB.push([++glossId, id, g.text, "eng", g.type, gi]);
+          glossesB.push([id, g.text, "eng", g.type, gi]);
         });
       });
 
@@ -347,8 +341,8 @@ async function main() {
     await flushAll();
 
     console.log(
-      `  ${entryCount} entries, ${kanjiId} kanji forms, ${readingId} readings, ` +
-        `${senseId} senses, ${glossId} glosses in ${((Date.now() - started) / 1000).toFixed(1)}s`,
+      `  ${entryCount} entries, ${kanjiB.total} kanji forms, ${readingsB.total} readings, ` +
+        `${senseId} senses, ${glossesB.total} glosses in ${((Date.now() - started) / 1000).toFixed(1)}s`,
     );
 
     /*
@@ -397,9 +391,8 @@ async function main() {
     // Weights drive ranking: common kanji first, then common kana, then the
     // rest, with romaji last since it is the fuzziest signal.
     await client.query(`
-      INSERT INTO search_terms (id, entry_id, term, term_type, weight)
+      INSERT INTO search_terms (entry_id, term, term_type, weight)
       SELECT
-        row_number() OVER (),
         entry_id,
         term,
         term_type,

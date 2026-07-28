@@ -15,6 +15,13 @@
       "when": 1785241059440,
       "tag": "0001_strict_gloss_tsv",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785249340187,
+      "tag": "0002_aspiring_zemo",
+      "breakpoints": true
     }
   ]
 }
