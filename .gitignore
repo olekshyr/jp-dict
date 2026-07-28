@@ -24,6 +24,15 @@
 .DS_Store
 *.pem
 
+# editors
+.idea/
+.vscode/
+
+# raw dictionary source files (JMdict_e.xml ~60MB, JmdictFurigana.json ~33MB).
+# Read only by scripts/import-jmdict.ts, never by the app at runtime — the
+# deployed app reads the dictionary from Neon, not the filesystem.
+/data
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -32,6 +41,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
