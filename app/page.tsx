@@ -74,7 +74,7 @@ export default function Home() {
           <Link href="/search" className="inline-block">
             <HoverBorderGradient
               as="div"
-              className="bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground"
+              className="dark:bg-black bg-white px-5 py-2.5 text-sm font-medium dark:text-primary-foreground text-black"
             >
               Open the dictionary
             </HoverBorderGradient>

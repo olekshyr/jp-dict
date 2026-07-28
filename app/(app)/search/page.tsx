@@ -14,7 +14,9 @@ import { ItemGroup } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SaveButton } from "../save-button";
 import { SearchField } from "../search-field";
+import { SearchPendingProvider } from "../search-pending";
 import { WordItem } from "../word-item";
+import { PendingResults } from "./pending-results";
 import { SearchBox } from "./search-box";
 
 /**
@@ -130,19 +132,33 @@ export default function SearchPage({
         Two boundaries, deliberately separate. The box only needs the query
         string; the results need a database round-trip. Splitting them lets the
         input become interactive without waiting on the query.
-      */}
-      <Suspense
-        // The fallback is the same field, inert: identical markup means the box
-        // is present in the prerendered HTML and does not shift when the seeded
-        // one takes over.
-        fallback={<SearchField disabled />}
-      >
-        <SearchBox />
-      </Suspense>
 
-      <Suspense fallback={<ResultsSkeleton />}>
-        <Results searchParams={searchParams} />
-      </Suspense>
+        Both sit inside the provider, including the box's inert fallback: it
+        holds the transition that submitting the form runs in, which is what
+        lets the field spin and these results dim from a single pending flag.
+        It reads nothing from the request, so the shell still prerenders.
+      */}
+      <SearchPendingProvider>
+        <Suspense
+          // The fallback is the same field, inert: identical markup means the
+          // box is present in the prerendered HTML and does not shift when the
+          // seeded one takes over.
+          fallback={<SearchField disabled />}
+        >
+          <SearchBox />
+        </Suspense>
+
+        {/*
+          Wrapping the boundary rather than <Results>: on a repeat query the
+          boundary never falls back — it is already mounted, so React holds the
+          old rows on screen — and this is what marks them as stale meanwhile.
+        */}
+        <PendingResults>
+          <Suspense fallback={<ResultsSkeleton />}>
+            <Results searchParams={searchParams} />
+          </Suspense>
+        </PendingResults>
+      </SearchPendingProvider>
     </div>
   );
 }
