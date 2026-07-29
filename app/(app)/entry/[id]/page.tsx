@@ -26,7 +26,7 @@ export const unstable_instant = {
  * build time.
  */
 export async function generateStaticParams() {
-  const ids = await getCommonEntryIds(2000);
+  const ids = await getCommonEntryIds(200);
   return ids.map((id) => ({ id: String(id) }));
 }
 
