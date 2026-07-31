@@ -7,6 +7,11 @@ import {
   getMyWords,
   type WordStatus,
 } from "@/lib/user-words/queries";
+import {
+  pageCount,
+  parsePagination,
+  paginationHref,
+} from "@/lib/pagination";
 import { Badge } from "@/components/ui/badge";
 import {
   Empty,
@@ -18,9 +23,12 @@ import {
 import { ItemGroup } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaginationBar } from "../pagination-bar";
 import { SaveButton } from "../save-button";
 import { StatusButton } from "../status-button";
 import { WordItem } from "../word-item";
+
+type ListPageParams = { filter?: string; page?: string; perPage?: string };
 
 const FILTERS: Array<{ value: WordStatus | "all"; label: string }> = [
   { value: "todo", label: "To learn" },
@@ -45,15 +53,30 @@ function ListSkeleton() {
 async function WordList({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<ListPageParams>;
 }>) {
-  const { filter: rawFilter } = await searchParams;
+  const { filter: rawFilter, ...rest } = await searchParams;
   const filter = parseFilter(rawFilter);
+  const status = filter === "all" ? undefined : filter;
+  const { page: requestedPage, perPage, offset } = parsePagination(rest);
 
-  const [words, counts] = await Promise.all([
-    getMyWords(filter === "all" ? undefined : filter),
+  const [requestedWords, counts] = await Promise.all([
+    getMyWords(status, perPage, offset),
     getMyWordCounts(),
   ]);
+
+  /*
+   * Unlike the dictionary, this list shrinks underneath the user: unsaving the
+   * last word on the last page leaves them pointing past the end. Clamp to the
+   * final page and re-fetch — the counts are already here, and the extra query
+   * only runs in that one case rather than on every load.
+   */
+  const total = filter === "all" ? counts.todo + counts.learned : counts[filter];
+  const page = Math.min(requestedPage, pageCount(total, perPage));
+  const words =
+    page === requestedPage
+      ? requestedWords
+      : await getMyWords(status, perPage, (page - 1) * perPage);
 
   return (
     <>
@@ -76,7 +99,17 @@ async function WordList({
                 // The tab is an anchor, not a <button>; without this Base UI
                 // warns that it is stripping native button semantics.
                 nativeButton={false}
-                render={<Link href={`/list?filter=${f.value}`} />}
+                // Carries the chosen page size across tabs but deliberately not
+                // the page: a different filter is a different list, so it
+                // starts at the top.
+                render={
+                  <Link
+                    href={paginationHref("/list", {
+                      filter: f.value,
+                      perPage,
+                    })}
+                  />
+                }
               >
                 {f.label}
                 <Badge variant="secondary">{count}</Badge>
@@ -100,21 +133,31 @@ async function WordList({
           </EmptyHeader>
         </Empty>
       ) : (
-        <ItemGroup>
-          {words.map((word) => (
-            <WordItem
-              key={word.entryId}
-              entryId={word.entryId}
-              headword={word.headword}
-              reading={word.reading}
-              romaji={word.romaji}
-              glossSummary={word.glossSummary}
-            >
-              <StatusButton entryId={word.entryId} status={word.status} />
-              <SaveButton entryId={word.entryId} saved />
-            </WordItem>
-          ))}
-        </ItemGroup>
+        <>
+          <ItemGroup>
+            {words.map((word) => (
+              <WordItem
+                key={word.entryId}
+                entryId={word.entryId}
+                headword={word.headword}
+                reading={word.reading}
+                romaji={word.romaji}
+                glossSummary={word.glossSummary}
+              >
+                <StatusButton entryId={word.entryId} status={word.status} />
+                <SaveButton entryId={word.entryId} saved />
+              </WordItem>
+            ))}
+          </ItemGroup>
+
+          <PaginationBar
+            pathname="/list"
+            params={{ filter }}
+            page={page}
+            perPage={perPage}
+            total={total}
+          />
+        </>
       )}
     </>
   );
@@ -123,7 +166,7 @@ async function WordList({
 export default function ListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<ListPageParams>;
 }) {
   return (
     <div>

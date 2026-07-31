@@ -43,13 +43,21 @@ export function isFrontMode(value: string): value is FrontMode {
 }
 
 /**
- * The signed-in user's saved words, newest first.
+ * One page of the signed-in user's saved words, newest first.
+ *
+ * No count comes back with it: the caller already has `getMyWordCounts()` for
+ * the filter tabs, and those counts are the same totals pagination needs.
  *
  * Not cached. This is a single index-only scan on
- * `(user_id, status, added_at DESC)`, and `use cache` is in-memory per instance
- * on serverless — it would add invalidation complexity for a near-zero hit rate.
+ * `(user_id, status, added_at DESC)` — which serves the offset too — and
+ * `use cache` is in-memory per instance on serverless, so it would add
+ * invalidation complexity for a near-zero hit rate.
  */
-export async function getMyWords(status?: WordStatus): Promise<SavedWord[]> {
+export async function getMyWords(
+  status: WordStatus | undefined,
+  limit: number,
+  offset: number,
+): Promise<SavedWord[]> {
   const userId = await requireUserId();
 
   const rows = await db
@@ -68,7 +76,9 @@ export async function getMyWords(status?: WordStatus): Promise<SavedWord[]> {
         ? and(eq(userWords.userId, userId), eq(userWords.status, status))
         : eq(userWords.userId, userId),
     )
-    .orderBy(desc(userWords.addedAt));
+    .orderBy(desc(userWords.addedAt))
+    .limit(limit)
+    .offset(offset);
 
   return rows.map((r) => ({
     entryId: r.entryId,

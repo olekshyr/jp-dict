@@ -1,6 +1,8 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { SearchIcon, SearchXIcon } from "lucide-react";
 
+import { parsePagination, paginationHref } from "@/lib/pagination";
 import { searchEntries } from "@/lib/dictionary/search";
 import { getSavedEntryIds } from "@/lib/user-words/queries";
 import {
@@ -16,8 +18,11 @@ import { SaveButton } from "../save-button";
 import { SearchField } from "../search-field";
 import { SearchPendingProvider } from "../search-pending";
 import { WordItem } from "../word-item";
+import { PaginationBar } from "../pagination-bar";
 import { PendingResults } from "./pending-results";
 import { SearchBox } from "./search-box";
+
+type SearchPageParams = { q?: string; page?: string; perPage?: string };
 
 /**
  * Validates at dev and build time that the Suspense boundaries here still
@@ -25,12 +30,19 @@ import { SearchBox } from "./search-box";
  * navigation block on the server instead of failing loudly.
  *
  * `runtime` rather than `static` because this route reads `?q`, so validation
- * needs concrete samples: the empty state that gets prefetched, and a typical
- * query.
+ * needs concrete samples: the empty state that gets prefetched, a typical
+ * query, and a paginated one — every distinct shape of entry point.
  */
 export const unstable_instant = {
   prefetch: "runtime",
-  samples: [{ searchParams: { q: null } }, { searchParams: { q: "ねこ" } }],
+  // Every param the route reads has to appear in every sample, `null` where it
+  // should be absent — otherwise validation can't tell "not paginated" from
+  // "forgot to declare it".
+  samples: [
+    { searchParams: { q: null, page: null, perPage: null } },
+    { searchParams: { q: "ねこ", page: null, perPage: null } },
+    { searchParams: { q: "ねこ", page: "2", perPage: "50" } },
+  ],
 };
 
 function ResultsSkeleton() {
@@ -46,9 +58,10 @@ function ResultsSkeleton() {
 async function Results({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<SearchPageParams>;
 }>) {
-  const { q = "" } = await searchParams;
+  const { q = "", ...rest } = await searchParams;
+  const { page, perPage, offset } = parsePagination(rest);
 
   if (q.trim().length === 0) {
     return (
@@ -72,10 +85,10 @@ async function Results({
    * the *current* user has saved is a separate, tiny, uncached lookup, so
    * personalisation never makes the expensive query uncacheable.
    */
-  const results = await searchEntries(q);
+  const { results, total } = await searchEntries(q, page, perPage);
   const savedIds = await getSavedEntryIds(results.map((r) => r.entryId));
 
-  if (results.length === 0) {
+  if (total === 0) {
     return (
       <Empty>
         <EmptyHeader>
@@ -91,11 +104,35 @@ async function Results({
     );
   }
 
+  /*
+   * There are matches, but none on this page — only reachable by editing the
+   * URL, since the dictionary never shrinks underneath a link.
+   */
+  if (results.length === 0) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <SearchXIcon />
+          </EmptyMedia>
+          <EmptyTitle>Nothing on page {page}</EmptyTitle>
+          <EmptyDescription>
+            “{q}” has {total} matches.{" "}
+            <Link href={paginationHref("/search", { q, perPage })}>
+              Back to the first page
+            </Link>
+            .
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
   return (
     <>
       <p className="mb-4 text-sm text-muted-foreground">
-        {results.length === 50 ? "Top 50 matches" : `${results.length} matches`}{" "}
-        for <span className="font-medium">{q}</span>
+        Showing {offset + 1}–{offset + results.length} of {total} matches for{" "}
+        <span className="font-medium">{q}</span>
       </p>
       <ItemGroup>
         {results.map((result) => (
@@ -115,6 +152,14 @@ async function Results({
           </WordItem>
         ))}
       </ItemGroup>
+
+      <PaginationBar
+        pathname="/search"
+        params={{ q }}
+        page={page}
+        perPage={perPage}
+        total={total}
+      />
     </>
   );
 }
@@ -122,7 +167,7 @@ async function Results({
 export default function SearchPage({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<SearchPageParams>;
 }>) {
   return (
     <div>

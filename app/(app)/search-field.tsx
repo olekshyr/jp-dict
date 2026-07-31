@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LoaderCircleIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { paginationHref } from "@/lib/pagination";
 import { Input } from "@/components/ui/input";
 import { useSearchPending } from "./search-pending";
 
@@ -13,13 +14,19 @@ import { useSearchPending } from "./search-pending";
  * nearest Suspense boundary — only the search page has a query worth restoring,
  * so that read lives in <SearchBox> and every other route renders this directly
  * and keeps its field in the static shell.
+ *
+ * `perPage` follows the same split: the search page passes the one it is
+ * currently showing so a new query keeps it, and every other mount omits it and
+ * gets the default.
  */
 export function SearchField({
   defaultValue = "",
+  perPage,
   autoFocus = false,
   disabled = false,
 }: Readonly<{
   defaultValue?: string;
+  perPage?: number;
   autoFocus?: boolean;
   disabled?: boolean;
 }>) {
@@ -37,8 +44,12 @@ export function SearchField({
         ).trim();
         // Inside a transition so the pending navigation is observable: this
         // field shows a spinner, and on the search page the stale results dim.
+        //
+        // The page size survives a new query; the page number does not — a new
+        // result set starts at the top. `paginationHref` drops the default page
+        // size, so the common case stays a clean `?q=`.
         startSearch(() => {
-          router.push(next ? `/search?q=${encodeURIComponent(next)}` : "/search");
+          router.push(paginationHref("/search", { q: next, perPage }));
         });
       }}
     >
