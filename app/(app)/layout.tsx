@@ -7,6 +7,7 @@ import {
   NavigationMenu,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
+import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/app/theme-toggle";
 import { NavLink } from "./nav-link";
 
@@ -44,8 +45,9 @@ export default function AppLayout({
 
       <header className="border-b">
         <nav className="mx-auto flex w-full max-w-4xl items-center gap-6 px-4 py-3">
-          <Link href="/search" className="font-semibold tracking-tight">
-            jp<span className="text-muted-foreground">-</span>dict
+          <Link href="/search" className="inline-flex shrink-0 items-center">
+            <Logo className="h-7" />
+            <span className="sr-only">jp-dict</span>
           </Link>
           <NavigationMenu className="max-w-none flex-1 justify-start">
             <NavigationMenuList className="justify-start gap-1">

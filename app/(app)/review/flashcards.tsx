@@ -92,9 +92,10 @@ export function Flashcards({
   const remaining = cards.filter((c) => !done.includes(c.entryId));
   const card = remaining[index];
 
+  /** Move to the next unlearned card, wrapping past the end. */
   function advance() {
     setFlipped(false);
-    setIndex((i) => (remaining.length <= 1 ? 0 : i % (remaining.length - 1)));
+    setIndex((i) => (i + 1) % remaining.length);
   }
 
   if (!card) {
@@ -162,7 +163,9 @@ export function Flashcards({
             startTransition(async () => {
               setDone((d) => [...d, id]);
               setFlipped(false);
-              setIndex(0);
+              // Dropping this card shifts the next one into the current index,
+              // so hold position — only wrap when this was the last card.
+              setIndex((i) => (i >= remaining.length - 1 ? 0 : i));
               await setStatus(id, "learned");
             });
           }}

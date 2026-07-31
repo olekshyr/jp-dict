@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 
+import { Logo } from "@/components/logo";
 import { CanvasText } from "@/components/ui/canvas-text";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { AuthControls, AuthControlsFallback } from "./auth-controls";
@@ -19,8 +20,9 @@ export default function Home() {
   return (
     <div className="flex flex-1 flex-col px-6">
       <header className="mx-auto flex w-full max-w-xl items-center justify-between py-5">
-        <span className="font-semibold tracking-tight">
-          jp<span className="text-muted-foreground">-</span>dict
+        <span className="inline-flex items-center">
+          <Logo className="h-7" />
+          <span className="sr-only">jp-dict</span>
         </span>
         <div className="flex items-center gap-2">
           <ThemeToggle />
