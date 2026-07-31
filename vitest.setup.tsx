@@ -1,0 +1,102 @@
+import "@testing-library/jest-dom/vitest";
+
+import { cleanup } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+
+import { resetNavigation } from "./test/next-navigation";
+
+/*
+ * The expensive part of testing this app is not rendering, it is what a
+ * component drags in. Everything mocked below is mocked once, here, for reasons
+ * of cost as much as isolation:
+ *
+ *   - `@/app/actions/words` is "use server" and imports `lib/db/client.ts`,
+ *     which throws at module load without DATABASE_URL and otherwise builds a
+ *     Neon client. `vi.mock` is hoisted, so the real module is never evaluated.
+ *   - `next/navigation`'s hooks throw outside a Next runtime.
+ *   - `next/link` pulls in Next's client router internals and an app-router
+ *     context that does not exist here. Every assertion is on the rendered
+ *     href, so a plain anchor loses nothing.
+ *   - `lucide-react` is a barrel that evaluates the whole icon set per test
+ *     file, and no test cares which glyph came out.
+ *
+ * What stays real is what is actually under test: @base-ui/react, wanakana,
+ * lib/pagination.ts, clsx/tailwind-merge.
+ */
+
+vi.mock("@/app/actions/words", () => ({
+  // Implementations are passed to vi.fn() rather than set afterwards, so
+  // resetAllMocks() below restores them and a per-test override cannot leak.
+  addWord: vi.fn(async () => undefined),
+  removeWord: vi.fn(async () => undefined),
+  setStatus: vi.fn(async () => undefined),
+  setFrontMode: vi.fn(async () => undefined),
+}));
+
+vi.mock("next/navigation", async () => await import("./test/next-navigation"));
+
+// Every href in this app is a string, so the stub does not bother with
+// next/link's UrlObject form — one showing up would render visibly wrong.
+vi.mock("next/link", () => ({
+  default: ({ href, children, ...rest }: React.ComponentProps<"a">) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
+vi.mock("lucide-react", () => {
+  const stubs = new Map<string, React.ComponentType<{ className?: string }>>();
+
+  // Vitest awaits the factory result and rejects reads of exports the mock
+  // does not claim to have, so the proxy answers `in` as well as `get` — and
+  // disowns `then`/`default`/symbols so it is not mistaken for a thenable.
+  const isIcon = (prop: string | symbol) =>
+    typeof prop === "string" && prop !== "then" && prop !== "default";
+
+  return new Proxy(
+    {},
+    {
+      has: (_target, prop) => isIcon(prop),
+      get(_target, prop) {
+        if (!isIcon(prop)) return undefined;
+        prop = prop as string;
+        if (!stubs.has(prop)) {
+          const Icon = (props: { className?: string }) => (
+            <svg data-icon={prop} aria-hidden {...props} />
+          );
+          Icon.displayName = prop;
+          stubs.set(prop, Icon);
+        }
+        return stubs.get(prop);
+      },
+    },
+  );
+});
+
+// Base UI's Select (reached through RowsPerPageSelect inside PaginationBar)
+// wants both of these, and jsdom provides neither.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
+globalThis.matchMedia ??= ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener() {},
+  removeListener() {},
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent: () => false,
+})) as typeof globalThis.matchMedia;
+
+afterEach(() => {
+  // RTL's auto-cleanup keys off a global afterEach, which `globals: false`
+  // doesn't give us.
+  cleanup();
+  resetNavigation();
+  vi.resetAllMocks();
+});

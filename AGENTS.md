@@ -23,13 +23,16 @@ Tailwind v4 + shadcn (Base UI) · deployed on Vercel · pnpm.
 | `pnpm dev` | Dev server |
 | `pnpm lint` | ESLint — **`next build` no longer runs it**, so run it yourself |
 | `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm test` | Vitest, single run — unit tests for UI components and pure helpers |
+| `pnpm test:watch` | Vitest in watch mode |
+| `pnpm test:coverage` | Vitest with a v8 coverage report — terminal summary + `coverage/` |
 | `pnpm db:generate` | Generate a migration from `lib/db/schema.ts` (no DB connection needed) |
 | `pnpm db:migrate` | Apply migrations |
 | `pnpm db:studio` | Drizzle Studio |
 | `pnpm db:import` | Re-import JMdict — rewrites the dictionary, see the runbook |
 
-Verify with `pnpm lint && pnpm typecheck` before claiming a change is done.
-There is no test suite.
+Verify with `pnpm lint && pnpm typecheck && pnpm test` before claiming a change
+is done. The suite is unit-only and runs in a few seconds — see [Testing](#testing).
 
 ## Architecture
 
@@ -103,6 +106,55 @@ cannot pass someone else's id. Keep it that way.
   absent from CI and Vercel. Re-import runbook:
   `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md` §6.
 
+## Testing
+
+Vitest + Testing Library, per the guide shipped with the installed Next
+(`node_modules/next/dist/docs/01-app/02-guides/testing/vitest.md`). Tests are
+colocated as `*.test.ts(x)` next to what they cover; `vitest.config.mts` and
+`vitest.setup.tsx` sit at the root.
+
+**What is worth testing here.** Behavior, not markup: URL vocabulary
+(`lib/pagination.ts`, `PaginationBar`'s hrefs), the query-routing helpers, the
+optimistic buttons, `Flashcards`' index arithmetic. The `components/ui/`
+wrappers that only spread props and emit `cva` class strings are Base UI's
+tests, not ours — `components/ui/pagination.tsx` is the exception because it
+clones its `render` element to inject the active-state attributes.
+
+**The setup file mocks aggressively, and that is the point.** The cost in this
+repo is not rendering, it is what a component drags in, so `vitest.setup.tsx`
+stubs four modules globally:
+
+- `@/app/actions/words` — it is `"use server"` and imports `lib/db/client.ts`,
+  which **throws at module load** without `DATABASE_URL`. `vi.mock` is hoisted,
+  so the real module never evaluates and tests need no env and no database.
+- `next/navigation` — the hooks throw outside a Next runtime. The stub is a
+  mutable store in `test/next-navigation.ts`: set a pathname, assert on
+  `router.push`.
+- `next/link` — the real one wants an app-router context that does not exist
+  under Vitest. A plain anchor loses nothing, since every assertion is on `href`.
+- `lucide-react` — the barrel evaluates the whole icon set per test file.
+
+Everything actually under test stays real: `@base-ui/react`, `wanakana`,
+`lib/pagination.ts`, `clsx`/`tailwind-merge`. Pure-logic tests open with
+`// @vitest-environment node` and skip jsdom entirely.
+
+Async Server Components (pages, `layout.tsx`) are **out of scope** — the Next
+docs state Vitest does not support them and recommend E2E instead.
+
+**Coverage** (`pnpm test:coverage`) is scoped rather than whole-repo, so the
+percentage means something: `coverage.include` in `vitest.config.mts` covers
+`app/`, `lib/` and the two `components/` files we own, and `coverage.exclude`
+drops what is out of scope by decision — async pages, Server Actions, the DB
+and `use cache` layers, generated `tags.ts`, and `components/ui/` (vendored
+shadcn, rewritten wholesale on upgrade; `pagination.tsx` is named back in
+because we modified it). Add to those lists when scope changes, rather than
+letting a 0% row sit there permanently.
+
+No coverage thresholds are enforced — the report is a map of the gaps, not a
+gate. The terminal table lists **only files below 100%**; the v8 text reporter
+collapses the rest regardless of `skipFull`, so read
+`coverage/coverage-summary.json` or `coverage/index.html` for the full picture.
+
 ## Environments
 
 `production` and `dev` are Neon branches of the same project;
@@ -124,6 +176,16 @@ preview and production. Full topology, migration workflow and growth triggers:
 - Search `ORDER BY` clauses must end in `entry_id ASC`. The ranking keys are
   full of ties and Postgres breaks them differently per execution, so without a
   total order LIMIT/OFFSET pages repeat and skip rows.
+- Base UI's `Button` keeps `role="button"` even with `nativeButton={false}`, so
+  an `<a href>` rendered through it — every pagination link, the "Back to my
+  list" button — is announced as a button, not a link. Tests query those by
+  text; `getByRole("link")` will not find them.
+- A `useOptimistic` value is seeded from its prop, so it snaps back the moment
+  the transition settles. To observe an optimistic flip in a test, keep the
+  mocked action pending with a deferred promise — an instantly-resolving mock
+  makes the assertion flaky. See `app/(app)/save-button.test.tsx`.
+- Base UI's `Select` commits an item off the full pointer sequence
+  (pointerdown → pointerup → mouseup → click), not a bare `fireEvent.click`.
 
 ## Maintaining this file
 
