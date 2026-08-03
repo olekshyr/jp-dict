@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/lib/db/client";
 import {
+  clampQuery,
   detectScript,
   escapeLikePrefix,
   normalizeJapanese,
@@ -88,8 +89,27 @@ function toPage(rows: SearchRow[]): SearchPage {
  * Note this deliberately knows nothing about the current user: results are
  * identical for everyone, which is what makes them shareable and cacheable.
  * "Is this word already in my list?" is fetched separately.
+ *
+ * `page` and `perPage` are expected to have been through `parsePagination`
+ * already — it is what bounds them, and everything below turns them straight
+ * into LIMIT/OFFSET.
  */
 export async function searchEntries(
+  rawQuery: string,
+  page: number,
+  perPage: number,
+): Promise<SearchPage> {
+  /*
+   * Deliberately not `use cache` itself. A cached function's arguments *are* its
+   * cache key, so caching here would key on the raw query — unbounded user input
+   * against a cache that never expires. Clamping first and caching below bounds
+   * the key space by MAX_QUERY_LENGTH instead, and costs nothing: this wrapper
+   * is pure string work with no round-trip of its own.
+   */
+  return searchClamped(clampQuery(rawQuery), page, perPage);
+}
+
+async function searchClamped(
   rawQuery: string,
   page: number,
   perPage: number,

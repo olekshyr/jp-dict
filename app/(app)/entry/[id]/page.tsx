@@ -5,7 +5,9 @@ import { getCommonEntryIds, getEntry } from "@/lib/dictionary/entry";
 import { describeTag } from "@/lib/dictionary/tags";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RequireAuth } from "../../require-auth";
 import { SearchField } from "../../search-field";
+import { parseEntryId } from "./entry-id";
 import { EntrySaveButton } from "./entry-save-button";
 import { RubyWord } from "./ruby-word";
 
@@ -58,8 +60,8 @@ async function EntryBody({
 }) {
   "use cache";
 
-  const entryId = Number(id);
-  if (!Number.isInteger(entryId)) notFound();
+  const entryId = parseEntryId(id);
+  if (entryId === null) notFound();
 
   const entry = await getEntry(entryId);
   if (!entry) notFound();
@@ -179,27 +181,37 @@ export default function EntryPage({
           string so it stays part of the `use cache` key.
         */}
         {params.then(({ id }) => (
-          <EntryBody
-            id={id}
-            saveSlot={
-              /*
-                Its own boundary, outside the cached body: reading whether this
-                user saved the entry is request-time work, and doing it inline
-                would make the shared entry markup unshareable.
-              */
-              <Suspense
-                // Explicit `key` because this element is built here as a prop
-                // and only lands among <div>'s children inside the cached body.
-                // React marks elements written as literal JSX children as
-                // key-checked; one that arrives across the cache boundary misses
-                // that pass and gets reported as an unkeyed list child.
-                key="save"
-                fallback={<Skeleton className="h-9 w-[4.5rem] rounded-md" />}
-              >
-                <EntrySaveButton id={id} />
-              </Suspense>
-            }
-          />
+          /*
+            EntryBody is `use cache`, so the auth check cannot live inside it.
+            The wrapper stops an anonymous request from populating — or racing
+            to read — the cached body, at the accepted cost of the prerendered
+            top-200 bodies now streaming behind the check instead of shipping
+            in the static shell. saveSlot needs no wrapping: EntrySaveButton
+            already goes through requireUserId.
+          */
+          <RequireAuth>
+            <EntryBody
+              id={id}
+              saveSlot={
+                /*
+                  Its own boundary, outside the cached body: reading whether this
+                  user saved the entry is request-time work, and doing it inline
+                  would make the shared entry markup unshareable.
+                */
+                <Suspense
+                  // Explicit `key` because this element is built here as a prop
+                  // and only lands among <div>'s children inside the cached body.
+                  // React marks elements written as literal JSX children as
+                  // key-checked; one that arrives across the cache boundary misses
+                  // that pass and gets reported as an unkeyed list child.
+                  key="save"
+                  fallback={<Skeleton className="h-9 w-[4.5rem] rounded-md" />}
+                >
+                  <EntrySaveButton id={id} />
+                </Suspense>
+              }
+            />
+          </RequireAuth>
         ))}
       </Suspense>
     </div>

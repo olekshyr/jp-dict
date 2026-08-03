@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_PER_PAGE,
+  MAX_PAGE,
   PER_PAGE_OPTIONS,
   pageCount,
   pageItems,
@@ -45,6 +46,35 @@ describe("parsePagination", () => {
   it("leaves a page past the end alone — clamping needs a total the caller owns", () => {
     expect(parsePagination({ page: "9999" }).page).toBe(9999);
   });
+
+  // `page` becomes a bound OFFSET. Anything Postgres can't read as a bigint —
+  // or that would make the offset absurd — has to be stopped here.
+  it.each(["1e21", "9999999999999999999999", "99999999999999999999999999"])(
+    "caps page=%s at MAX_PAGE rather than passing it to the query",
+    (page) => {
+      const { page: parsed, offset } = parsePagination({ page });
+      expect(parsed).toBe(MAX_PAGE);
+      expect(Number.isSafeInteger(offset)).toBe(true);
+    },
+  );
+
+  it("keeps every offset it produces inside the safe integer range", () => {
+    for (const perPage of PER_PAGE_OPTIONS) {
+      const { offset } = parsePagination({
+        page: String(Number.MAX_SAFE_INTEGER),
+        perPage: String(perPage),
+      });
+      expect(Number.isSafeInteger(offset)).toBe(true);
+      expect(String(offset)).not.toMatch(/e/);
+    }
+  });
+
+  it.each(["Infinity", "1e309", "NaN"])(
+    "clamps the non-finite page=%s back to 1",
+    (page) => {
+      expect(parsePagination({ page })).toMatchObject({ page: 1, offset: 0 });
+    },
+  );
 });
 
 describe("pageCount", () => {

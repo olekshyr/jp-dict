@@ -1,5 +1,6 @@
 import { getSavedEntryIds } from "@/lib/user-words/queries";
 import { SaveButton } from "../../save-button";
+import { parseEntryId } from "./entry-id";
 
 /**
  * The save toggle for a single entry, with its saved state resolved per user.
@@ -9,13 +10,13 @@ import { SaveButton } from "../../save-button";
  * whether *this* user saved the word has to happen outside it, which is why the
  * page passes this in as a pass-through slot behind its own <Suspense>.
  *
- * Takes the raw `id` string so it can bail out on a junk URL by itself. Without
- * that, `Number(id)` would send NaN into the query and blow up before
- * <EntryBody> got the chance to call notFound().
+ * Takes the raw `id` string so it can bail out on a junk URL by itself, through
+ * the same parser <EntryBody> uses. Without that, a junk id would reach the
+ * query and blow up before <EntryBody> got the chance to call notFound().
  */
 export async function EntrySaveButton({ id }: { id: string }) {
-  const entryId = Number(id);
-  if (!Number.isInteger(entryId)) return null;
+  const entryId = parseEntryId(id);
+  if (entryId === null) return null;
 
   const savedIds = await getSavedEntryIds([entryId]);
 

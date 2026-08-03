@@ -214,9 +214,10 @@ Deliberately not built now. Each has a condition that says when to build it.
 
 ## Out of scope
 
-Monitoring and alerting, rate limiting, a staging environment distinct from
-preview, database backups beyond Neon's built-in instant restore, and the SRS
-scheduling feature the `userWords` columns anticipate.
+Operational hardening (observability and edge traffic controls), a staging
+environment distinct from preview, database backups beyond Neon's built-in
+instant restore, and the SRS scheduling feature the `userWords` columns
+anticipate.
 
 ## Success criteria
 

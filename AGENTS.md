@@ -65,6 +65,15 @@ CDN-bypassed. Every function in `lib/user-words/` and every Server Action calls
 `requireUserId()` itself and takes no `userId` parameter, so a caller physically
 cannot pass someone else's id. Keep it that way.
 
+The dictionary functions themselves stay user-blind — no `requireUserId()`,
+deliberately, since their results are identical for every user and that is
+what makes them cacheable. The guard therefore lives in the render path
+instead: any component that can trigger dictionary DB work awaits
+`auth.protect()` first (`Results` on `/search`, `RequireAuth` around the
+cached entry body), because `AuthGate` is a concurrent `<Suspense>` sibling
+and on its own redirects *around* the query, not before it. History and
+threat model: `docs/superpowers/specs/2026-08-03-auth-guard-dictionary-queries-design.md`.
+
 ## Conventions
 
 <!-- Append here as conventions get established. Keep each one to a sentence or
@@ -159,9 +168,10 @@ collapses the rest regardless of `skipFull`, so read
 
 `production` and `dev` are Neon branches of the same project;
 `.env.local` points at **`dev`** and no production connection string should ever
-sit on a developer machine. One Clerk *development* instance serves local,
-preview and production. Full topology, migration workflow and growth triggers:
-`docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
+sit on a developer machine. Production runs a Clerk **production** instance;
+local and preview use the Clerk *development* instance, and its keys are the
+only ones that belong in `.env.local`. Full topology, migration workflow and
+growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
 
 ## Gotchas
 
@@ -186,6 +196,15 @@ preview and production. Full topology, migration workflow and growth triggers:
   makes the assertion flaky. See `app/(app)/save-button.test.tsx`.
 - Base UI's `Select` commits an item off the full pointer sequence
   (pointerdown → pointerup → mouseup → click), not a bare `fireEvent.click`.
+- **`Number.isInteger` is not a bound on a number from the URL.** `1e21` passes
+  it, serializes to `1e+21`, and Postgres answers `invalid input syntax for type
+  bigint` — a 404 becomes a 500. `parsePagination` caps at `MAX_PAGE` and
+  `parseEntryId` accepts only the canonical decimal form; any new numeric route
+  param needs the same treatment before it reaches a query.
+- **A `use cache` function's arguments *are* its cache key**, so unbounded user
+  input must never be one — with `cacheLife('max')` that is unbounded permanent
+  entries. `searchEntries` is deliberately *not* cached itself: it clamps the
+  query and delegates to a cached inner function, which is the pattern to copy.
 
 ## Maintaining this file
 

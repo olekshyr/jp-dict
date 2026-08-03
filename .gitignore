@@ -32,6 +32,7 @@
 # Read only by scripts/import-jmdict.ts, never by the app at runtime — the
 # deployed app reads the dictionary from Neon, not the filesystem.
 /data
+/tmp
 
 # debug
 npm-debug.log*

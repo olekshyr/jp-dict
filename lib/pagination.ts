@@ -11,6 +11,22 @@ export const PER_PAGE_OPTIONS = [10, 20, 50, 100] as const;
 
 export const DEFAULT_PER_PAGE = 10;
 
+/**
+ * The deepest page a URL may ask for.
+ *
+ * `page` is user input that ends up as a bound OFFSET, and `Number.isInteger`
+ * alone is not a bound: `?page=1e21` is an integer to JavaScript, serializes to
+ * `1e+21`, and Postgres answers `invalid input syntax for type bigint`. On the
+ * search route it is also part of a `use cache` key with `cacheLife('max')`, so
+ * an unbounded page number means an unbounded number of entries that never
+ * expire.
+ *
+ * 10,000 is far past anything reachable. The dictionary holds ~218k entries and
+ * the widest single query matches ~21k of them — about 2,200 pages at the
+ * smallest page size — so no page a user can actually navigate to gets clamped.
+ */
+export const MAX_PAGE = 10_000;
+
 /** How many page number links sit either side of the current one. */
 const WINDOW = 1;
 
@@ -30,7 +46,15 @@ function parsePerPage(raw?: string): number {
 /**
  * Reads `?page` / `?perPage`, clamping anything unexpected back to a safe
  * default. Search params are user input, so this never throws: a hand-edited
- * `?perPage=999999` becomes the default rather than an unbounded query.
+ * `?perPage=999999` becomes the default rather than an unbounded query, and a
+ * `?page` beyond `MAX_PAGE` comes back as `MAX_PAGE` rather than as an offset
+ * the database cannot parse. Every caller that turns these into SQL relies on
+ * that, so bound the value here rather than at each query.
+ *
+ * The `Math.min` is doing the safety work, not the `isInteger`: it is what keeps
+ * `page` — and so `offset` — inside the range Postgres can read, whatever
+ * absurdity arrives in the URL. `isInteger` only rejects the fractions and the
+ * non-finite values, which have no sensible clamp and fall back to page 1.
  *
  * A `page` past the end of the results is *not* clamped here — that needs a
  * total, which only the caller has.
@@ -41,7 +65,9 @@ export function parsePagination(
   const perPage = parsePerPage(raw.perPage);
   const parsedPage = Number(raw.page);
   const page =
-    Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    Number.isInteger(parsedPage) && parsedPage > 0
+      ? Math.min(parsedPage, MAX_PAGE)
+      : 1;
 
   return { page, perPage, offset: (page - 1) * perPage };
 }

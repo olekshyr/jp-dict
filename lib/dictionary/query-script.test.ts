@@ -3,6 +3,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_QUERY_LENGTH,
+  clampQuery,
   detectScript,
   escapeLikePrefix,
   normalizeJapanese,
@@ -24,6 +26,29 @@ describe("detectScript", () => {
 
   it("routes mixed input as japanese — one Japanese character is enough", () => {
     expect(detectScript("cat猫")).toBe("japanese");
+  });
+});
+
+describe("clampQuery", () => {
+  it("leaves a normal query untouched", () => {
+    expect(clampQuery("ねこ")).toBe("ねこ");
+  });
+
+  it("trims, so a padded query keys the same cache entry", () => {
+    expect(clampQuery("  neko  ")).toBe("neko");
+  });
+
+  it("truncates a query longer than the cap", () => {
+    expect(clampQuery("a".repeat(5000))).toHaveLength(MAX_QUERY_LENGTH);
+  });
+
+  it("counts code points, so truncation never splits a surrogate pair", () => {
+    // Each emoji is two UTF-16 units, so a `.slice(MAX_QUERY_LENGTH)` would cut
+    // half as many through the middle of one, leaving a lone surrogate to hand
+    // to Postgres.
+    expect(clampQuery("🐱".repeat(MAX_QUERY_LENGTH * 2))).toBe(
+      "🐱".repeat(MAX_QUERY_LENGTH),
+    );
   });
 });
 

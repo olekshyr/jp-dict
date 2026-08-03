@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
 import { SearchIcon, SearchXIcon } from "lucide-react";
 
 import { parsePagination, paginationHref } from "@/lib/pagination";
@@ -60,6 +61,14 @@ async function Results({
 }: Readonly<{
   searchParams: Promise<SearchPageParams>;
 }>) {
+  /*
+   * Results renders concurrently with the layout's AuthGate, so without this
+   * an anonymous request reaches Neon before the redirect lands. Serialised
+   * here rather than in searchEntries: the data layer stays user-blind and
+   * cacheable; the guard rides the component that is already request-time.
+   */
+  await auth.protect();
+
   const { q = "", ...rest } = await searchParams;
   const { page, perPage, offset } = parsePagination(rest);
 

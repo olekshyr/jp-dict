@@ -8,6 +8,30 @@ import { isJapanese, isKana, toHiragana, toRomaji } from "wanakana";
  */
 export type QueryScript = "japanese" | "latin" | "empty";
 
+/**
+ * The longest query the dictionary will look at.
+ *
+ * The raw query is both a bind parameter and — via `searchEntries` — part of a
+ * `use cache` key that never expires, so its length needs a bound of its own
+ * rather than inheriting whatever fits in a URL. 64 code points is well past
+ * the longest headword or gloss phrase in JMdict.
+ */
+export const MAX_QUERY_LENGTH = 64;
+
+/**
+ * Trims a raw query and caps its length, so what reaches the query layer is
+ * bounded and canonical: `" neko "` and `"neko"` are one cache entry, not two.
+ *
+ * Truncates rather than rejects. Every search here is a prefix or a trigram
+ * match, and a shorter prefix only ever matches more, so a clipped query still
+ * answers the question the user was asking. Slicing by code point rather than
+ * by UTF-16 unit keeps the cut from splitting a surrogate pair and handing
+ * Postgres half a character.
+ */
+export function clampQuery(raw: string): string {
+  return [...raw.trim()].slice(0, MAX_QUERY_LENGTH).join("");
+}
+
 export function detectScript(raw: string): QueryScript {
   const q = raw.trim();
   if (q.length === 0) return "empty";
