@@ -179,7 +179,7 @@ export function Flashcards({
       </AnimatePresence>
 
       <p className="mt-3 text-center text-sm text-muted-foreground">
-        {flipped ? "Tap to hide" : "Tap to reveal"} · {deck.length} left
+        Click on the card to flip it · {deck.length} left
       </p>
 
       {/* Deliberately not a ButtonGroup: these are opposing choices, not one
