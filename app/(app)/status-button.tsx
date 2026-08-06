@@ -1,9 +1,11 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { setStatus } from "@/app/actions/words";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
+import { useRow } from "./row-context";
 
 /** Moves a word between the todo and learned buckets. */
 export function StatusButton({
@@ -13,9 +15,10 @@ export function StatusButton({
   entryId: number;
   status: "todo" | "learned";
 }) {
-  const [optimisticStatus, setOptimisticStatus] = useOptimistic(status);
+  const [current, setCurrent] = useState(status);
   const [pending, startTransition] = useTransition();
-  const next = optimisticStatus === "learned" ? "todo" : "learned";
+  const row = useRow();
+  const next = current === "learned" ? "todo" : "learned";
 
   return (
     <Button
@@ -24,13 +27,25 @@ export function StatusButton({
       size="xs"
       disabled={pending}
       onClick={() => {
+        setCurrent(next);
+        const token = row?.setStatus(next);
         startTransition(async () => {
-          setOptimisticStatus(next);
-          await setStatus(entryId, next);
+          try {
+            await setStatus(entryId, next);
+          } catch (error) {
+            console.error(error);
+            setCurrent(current);
+            row?.rollback(token);
+            toast.add({
+              type: "error",
+              title: "Couldn't save",
+              description: "Check your connection and try again.",
+            });
+          }
         });
       }}
     >
-      {optimisticStatus === "learned" ? "Mark unlearned" : "Mark learned"}
+      {current === "learned" ? "Mark unlearned" : "Mark learned"}
     </Button>
   );
 }

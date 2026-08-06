@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
+import { MotionConfig } from "motion/react";
 
 import {
   NavigationMenu,
@@ -68,7 +69,15 @@ export default function AppLayout({
       </header>
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
-        {children}
+        {/*
+          Single place for both animated surfaces (the review card swap, the
+          list row exit) to respect the OS reduced-motion setting: `motion`
+          does not honour it by default, and `MotionConfig` is a client
+          component receiving an already-server-rendered `children` slot, so
+          wrapping it here doesn't pull this layout's own render into the
+          request-time (non-cacheable) part of the tree.
+        */}
+        <MotionConfig reducedMotion="user">{children}</MotionConfig>
       </main>
     </div>
   );

@@ -38,7 +38,7 @@ is done. The suite is unit-only and runs in a few seconds — see [Testing](#tes
 
 ```
 app/
-  layout.tsx           root: fonts, ClerkProvider (inside <body>), theme script
+  layout.tsx           root: fonts, ClerkProvider (inside <body>), theme script, <Toaster/>
   (app)/               signed-in area — nav chrome + AuthGate
     search/ list/ review/ entry/[id]/
     *.tsx              route-local components, colocated
@@ -57,7 +57,13 @@ docs/                  design specs and runbooks
 **Two data domains, different rules.** Dictionary data is immutable, shared and
 cacheable — it belongs in the static shell (`use cache` / `cacheLife`). User
 data is request-time and never cached server-side — it streams behind
-`<Suspense>` and is invalidated with `refresh()`, not `revalidateTag`.
+`<Suspense>`, and after a write it is the *client* that reflects the change,
+not a server round-trip. Server Actions are pure writes: no `refresh()`, no
+`revalidateTag`. Ordinary navigation re-queries because `staleTimes.dynamic`
+defaults to 0. The client-side optimistic layer this implies — `Flashcards`
+owning its deck, `/list`'s two-context delta session, per-row removal —
+is design and rationale in
+`docs/superpowers/specs/2026-08-04-optimistic-writes-design.md`.
 
 **Authorization lives in the data layer.** `proxy.ts` (Next 16's renamed
 `middleware`) runs `clerkMiddleware()` and protects nothing — it can be
@@ -87,8 +93,13 @@ threat model: `docs/superpowers/specs/2026-08-03-auth-guard-dictionary-queries-d
 - **Route-specific components stay colocated** under `app/(app)/…`; reusable
   primitives go in `components/ui/` and build on the existing shadcn/Base UI
   `Button` etc. rather than hand-rolled elements.
-- **List state lives in the URL** (`?q`, `?page`, `?perPage`), never in client
-  state — back/forward, refresh and a shared link all land in the same place.
+- **Addressable list state lives in the URL** (`?q`, `?page`, `?perPage`,
+  `?filter`) — back/forward, refresh and a shared link all land in the same
+  place. Per-session optimistic state (`/list`'s count deltas, a row's own
+  `removed`, the review deck) is deliberately client state instead: it is
+  keyed on the URL state that produced it and reset by navigation, not a
+  second source of truth for it. See
+  `docs/superpowers/specs/2026-08-04-optimistic-writes-design.md`.
 - **Comments explain *why*, not *what*.** This codebase's comments carry the
   reasoning behind non-obvious choices (index shapes, missing foreign keys,
   provider placement). Match that density and register; don't narrate code.
@@ -190,10 +201,11 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   an `<a href>` rendered through it — every pagination link, the "Back to my
   list" button — is announced as a button, not a link. Tests query those by
   text; `getByRole("link")` will not find them.
-- A `useOptimistic` value is seeded from its prop, so it snaps back the moment
-  the transition settles. To observe an optimistic flip in a test, keep the
-  mocked action pending with a deferred promise — an instantly-resolving mock
-  makes the assertion flaky. See `app/(app)/save-button.test.tsx`.
+- **A prop that seeds client state is not a live value.** `SaveButton`,
+  `StatusButton` and `Flashcards` all seed from a server prop and then own it,
+  because Server Actions no longer refresh the route. Reading the prop again
+  after a write would show pre-write data. They roll back explicitly in a
+  `catch` instead of letting a transition settle.
 - Base UI's `Select` commits an item off the full pointer sequence
   (pointerdown → pointerup → mouseup → click), not a bare `fireEvent.click`.
 - **`Number.isInteger` is not a bound on a number from the URL.** `1e21` passes
@@ -205,6 +217,12 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   input must never be one — with `cacheLife('max')` that is unbounded permanent
   entries. `searchEntries` is deliberately *not* cached itself: it clamps the
   query and delegates to a cached inner function, which is the pattern to copy.
+- **`refresh()` re-runs uncached queries, so it does not "refresh" a
+  randomly-ordered one — it redraws it.** `getReviewCards` is
+  `ORDER BY random() LIMIT 20`, so a refresh mid-session returned a different
+  twenty and reset the "N left" counter. Client state seeded from a prop like
+  that must own the value and ignore later props; see
+  `app/(app)/review/flashcards.tsx`.
 
 ## Maintaining this file
 

@@ -1,7 +1,6 @@
 "use server";
 
 import { and, eq } from "drizzle-orm";
-import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/lib/db/client";
@@ -13,8 +12,11 @@ import { requireUserId } from "@/lib/user-words/auth";
  * every one of these re-authenticates and validates its own input. None of them
  * accepts a user id — `requireUserId()` reads it from the session.
  *
- * They call `refresh()` rather than `revalidateTag`: user data is never cached
- * server-side, so there is no tag to expire, only a client router to re-render.
+ * They deliberately do not call `refresh()`. User data is never cached
+ * server-side, so there is nothing to invalidate; the only thing a refresh did
+ * was re-render the route, which costs a round-trip and re-runs every query on
+ * the page. The client that issued the write already reflects it optimistically
+ * and rolls back if the promise rejects, so these stay pure writes.
  */
 
 const entryIdSchema = z.coerce.number().int().positive();
@@ -36,8 +38,6 @@ export async function addWord(rawEntryId: unknown) {
     .insert(userWords)
     .values({ userId, entryId })
     .onConflictDoNothing();
-
-  refresh();
 }
 
 export async function removeWord(rawEntryId: unknown) {
@@ -47,8 +47,6 @@ export async function removeWord(rawEntryId: unknown) {
   await db
     .delete(userWords)
     .where(and(eq(userWords.userId, userId), eq(userWords.entryId, entryId)));
-
-  refresh();
 }
 
 export async function setStatus(rawEntryId: unknown, rawStatus: unknown) {
@@ -65,8 +63,6 @@ export async function setStatus(rawEntryId: unknown, rawStatus: unknown) {
     // Scoped by userId as well as entryId: without it, any signed-in user could
     // mutate another user's row by guessing an entry id.
     .where(and(eq(userWords.userId, userId), eq(userWords.entryId, entryId)));
-
-  refresh();
 }
 
 export async function setFrontMode(rawMode: unknown) {
@@ -77,6 +73,4 @@ export async function setFrontMode(rawMode: unknown) {
     .insert(users)
     .values({ id: userId, frontMode })
     .onConflictDoUpdate({ target: users.id, set: { frontMode } });
-
-  refresh();
 }

@@ -1,10 +1,12 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
 
 import { setFrontMode, setStatus } from "@/app/actions/words";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import {
   Empty,
   EmptyContent,
@@ -85,17 +87,21 @@ export function Flashcards({
 }>) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [mode, setMode] = useOptimistic(initialMode);
+  const [mode, setMode] = useState(initialMode);
   const [, startTransition] = useTransition();
-  const [done, setDone] = useState<number[]>([]);
 
-  const remaining = cards.filter((c) => !done.includes(c.entryId));
-  const card = remaining[index];
+  // The deck IS the session. Seeded from the server once and deliberately never
+  // re-synced: getReviewCards refills to its limit and re-randomises on every
+  // call, so adopting a later `cards` would swap the deck out from under the
+  // count — which is exactly the bug this replaced.
+  const [deck, setDeck] = useState(cards);
 
-  /** Move to the next unlearned card, wrapping past the end. */
+  const card = deck[index];
+
+  /** Move to the next card, wrapping past the end. */
   function advance() {
     setFlipped(false);
-    setIndex((i) => (i + 1) % remaining.length);
+    setIndex((i) => (i + 1) % deck.length);
   }
 
   if (!card) {
@@ -125,29 +131,55 @@ export function Flashcards({
       <FrontModeTabs
         mode={mode}
         onModeChange={(next) => {
+          const previous = mode;
+          setMode(next);
+          setFlipped(false);
           startTransition(async () => {
-            setMode(next);
-            setFlipped(false);
-            await setFrontMode(next);
+            try {
+              await setFrontMode(next);
+            } catch (error) {
+              console.error(error);
+              setMode(previous);
+              toast.add({
+                type: "error",
+                title: "Couldn't save your preference",
+                description: "Check your connection and try again.",
+              });
+            }
           });
         }}
       />
 
-      <button
-        type="button"
-        onClick={() => setFlipped((f) => !f)}
-        aria-label={flipped ? "Show front" : "Reveal answer"}
-        className="flex min-h-64 w-full items-center justify-center rounded-xl border p-8 transition-colors hover:border-ring"
-      >
-        {flipped ? (
-          <Back card={card} mode={mode} />
-        ) : (
-          <Front card={card} mode={mode} />
-        )}
-      </button>
+      {/*
+        Keyed on the entry id so a new card is a new element: the outgoing one
+        fades while the incoming one rises, which reads as a deck rather than
+        text being swapped in place.
+      */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={card.entryId}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.15 }}
+        >
+          <button
+            type="button"
+            onClick={() => setFlipped((f) => !f)}
+            aria-label={flipped ? "Show front" : "Reveal answer"}
+            className="flex min-h-64 w-full items-center justify-center rounded-xl border p-8 transition-colors hover:border-ring"
+          >
+            {flipped ? (
+              <Back card={card} mode={mode} />
+            ) : (
+              <Front card={card} mode={mode} />
+            )}
+          </button>
+        </motion.div>
+      </AnimatePresence>
 
       <p className="mt-3 text-center text-sm text-muted-foreground">
-        {flipped ? "Tap to hide" : "Tap to reveal"} · {remaining.length} left
+        {flipped ? "Tap to hide" : "Tap to reveal"} · {deck.length} left
       </p>
 
       {/* Deliberately not a ButtonGroup: these are opposing choices, not one
@@ -159,14 +191,28 @@ export function Flashcards({
         <Button
           type="button"
           onClick={() => {
-            const id = card.entryId;
+            const removed = card;
+            const at = index;
             startTransition(async () => {
-              setDone((d) => [...d, id]);
-              setFlipped(false);
               // Dropping this card shifts the next one into the current index,
               // so hold position — only wrap when this was the last card.
-              setIndex((i) => (i >= remaining.length - 1 ? 0 : i));
-              await setStatus(id, "learned");
+              setIndex((i) => (i >= deck.length - 1 ? 0 : i));
+              setDeck((d) => d.filter((c) => c.entryId !== removed.entryId));
+              setFlipped(false);
+              try {
+                await setStatus(removed.entryId, "learned");
+              } catch (error) {
+                console.error(error);
+                // Back to exactly where it was, index included: the user is
+                // mid-session and a card reappearing elsewhere reads as a bug.
+                setDeck((d) => [...d.slice(0, at), removed, ...d.slice(at)]);
+                setIndex(at);
+                toast.add({
+                  type: "error",
+                  title: "Couldn't save",
+                  description: "Check your connection and try again.",
+                });
+              }
             });
           }}
         >

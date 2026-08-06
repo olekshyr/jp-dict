@@ -2,23 +2,14 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { addWord, removeWord } from "@/app/actions/words";
+import { toast } from "@/components/ui/toast";
 import { SaveButton } from "./save-button";
 
 /**
- * `useOptimistic` is seeded from the `saved` prop, so the optimistic label only
- * holds while the transition is in flight — the moment the action settles,
- * React snaps back to the prop (which, in the real app, has been re-rendered by
- * `refresh()` by then). Tests that want to observe the flip therefore have to
- * keep the action pending, hence the deferred below.
+ * The `saved` prop is an initial value, not a live one: the button holds its own
+ * state and the Server Action no longer re-renders the page, so the flipped
+ * label sticks without a pending promise to hold it there.
  */
-function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
-}
-
 describe("SaveButton", () => {
   it("reads Save when the word is not saved", () => {
     render(<SaveButton entryId={42} saved={false} />);
@@ -58,19 +49,32 @@ describe("SaveButton", () => {
     expect(addWord).not.toHaveBeenCalled();
   });
 
-  it("flips the label and disables itself while the action is in flight", async () => {
-    const pending = deferred();
-    vi.mocked(addWord).mockReturnValue(pending.promise);
-
+  it("keeps the flipped label after the action settles", async () => {
     render(<SaveButton entryId={42} saved={false} />);
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    const button = await screen.findByRole("button", { name: "Saved" });
-    expect(button).toHaveAttribute("aria-pressed", "true");
-    expect(button).toBeDisabled();
 
     await act(async () => {
-      pending.resolve();
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
     });
+
+    const button = screen.getByRole("button", { name: "Saved" });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("reverts and warns when the write fails", async () => {
+    vi.mocked(addWord).mockRejectedValueOnce(new Error("offline"));
+    const add = vi.spyOn(toast, "add").mockReturnValue("toast-id");
+
+    render(<SaveButton entryId={42} saved={false} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    });
+
+    expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(add).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error" }),
+    );
   });
 });

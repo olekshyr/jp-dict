@@ -1,11 +1,14 @@
+import "./globals.css";
+
 import type { Metadata } from "next";
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
-import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeScript } from "./theme-script";
+
+import { Toaster } from "@/components/ui/toast";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -49,6 +52,7 @@ export default function RootLayout({
         <ClerkProvider>{children}</ClerkProvider>
         <Analytics />
         <SpeedInsights />
+        <Toaster />
       </body>
     </html>
   );

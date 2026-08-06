@@ -7,12 +7,7 @@ import {
   getMyWords,
   type WordStatus,
 } from "@/lib/user-words/queries";
-import {
-  pageCount,
-  parsePagination,
-  paginationHref,
-} from "@/lib/pagination";
-import { Badge } from "@/components/ui/badge";
+import { pageCount, parsePagination } from "@/lib/pagination";
 import {
   Empty,
   EmptyDescription,
@@ -22,19 +17,15 @@ import {
 } from "@/components/ui/empty";
 import { ItemGroup } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ListFilterTabs } from "./list-filter-tabs";
+import { ListRow } from "./list-row";
+import { ListSession } from "./list-session";
 import { PaginationBar } from "../pagination-bar";
 import { SaveButton } from "../save-button";
 import { StatusButton } from "../status-button";
 import { WordItem } from "../word-item";
 
 type ListPageParams = { filter?: string; page?: string; perPage?: string };
-
-const FILTERS: Array<{ value: WordStatus | "all"; label: string }> = [
-  { value: "todo", label: "To learn" },
-  { value: "learned", label: "Learned" },
-  { value: "all", label: "All" },
-];
 
 function parseFilter(raw?: string): WordStatus | "all" {
   return raw === "learned" || raw === "all" ? raw : "todo";
@@ -79,45 +70,10 @@ async function WordList({
       : await getMyWords(status, perPage, (page - 1) * perPage);
 
   return (
-    <>
-      {/*
-        The filter lives in the URL, so each tab is a <Link> and the active tab
-        is whatever `?filter=` says. `Tabs` is controlled by that value with no
-        onValueChange: navigation, not local state, is what moves the selection.
-      */}
-      <Tabs value={filter} className="mb-6">
-        <TabsList>
-          {FILTERS.map((f) => {
-            const count =
-              f.value === "all"
-                ? counts.todo + counts.learned
-                : counts[f.value as WordStatus];
-            return (
-              <TabsTrigger
-                key={f.value}
-                value={f.value}
-                // The tab is an anchor, not a <button>; without this Base UI
-                // warns that it is stripping native button semantics.
-                nativeButton={false}
-                // Carries the chosen page size across tabs but deliberately not
-                // the page: a different filter is a different list, so it
-                // starts at the top.
-                render={
-                  <Link
-                    href={paginationHref("/list", {
-                      filter: f.value,
-                      perPage,
-                    })}
-                  />
-                }
-              >
-                {f.label}
-                <Badge variant="secondary">{count}</Badge>
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-      </Tabs>
+    // Keyed on the query that produced `counts`, so navigating to another
+    // filter or page remounts the session and stale deltas cannot survive.
+    <ListSession key={`${filter}:${page}:${perPage}`} counts={counts}>
+      <ListFilterTabs filter={filter} perPage={perPage} />
 
       {words.length === 0 ? (
         <Empty>
@@ -136,17 +92,18 @@ async function WordList({
         <>
           <ItemGroup>
             {words.map((word) => (
-              <WordItem
-                key={word.entryId}
-                entryId={word.entryId}
-                headword={word.headword}
-                reading={word.reading}
-                romaji={word.romaji}
-                glossSummary={word.glossSummary}
-              >
-                <StatusButton entryId={word.entryId} status={word.status} />
-                <SaveButton entryId={word.entryId} saved />
-              </WordItem>
+              <ListRow key={word.entryId} filter={filter} status={word.status}>
+                <WordItem
+                  entryId={word.entryId}
+                  headword={word.headword}
+                  reading={word.reading}
+                  romaji={word.romaji}
+                  glossSummary={word.glossSummary}
+                >
+                  <StatusButton entryId={word.entryId} status={word.status} />
+                  <SaveButton entryId={word.entryId} saved />
+                </WordItem>
+              </ListRow>
             ))}
           </ItemGroup>
 
@@ -159,7 +116,7 @@ async function WordList({
           />
         </>
       )}
-    </>
+    </ListSession>
   );
 }
 
