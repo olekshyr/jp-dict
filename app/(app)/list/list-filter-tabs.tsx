@@ -45,9 +45,10 @@ export function ListFilterTabs({
               // the page: a different filter is a different list, so it starts
               // at the top.
               render={
-                <Link
-                  href={paginationHref("/list", { filter: f.value, perPage })}
-                />
+                filter == f.value ? <span /> :
+                  (
+                    <Link href={paginationHref("/list", { filter: f.value, perPage })} />
+                  )
               }
             >
               {f.label}
