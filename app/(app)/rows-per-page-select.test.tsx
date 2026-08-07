@@ -2,7 +2,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { router } from "@/test/next-navigation";
+import { NavPendingProvider } from "./nav-pending";
 import { RowsPerPageSelect } from "./rows-per-page-select";
+
+// The provider is mounted in the (app) layout in the real app; the select
+// navigates inside its transition, so every render here goes through it.
+const renderSelect = (ui: React.ReactElement) =>
+  render(<NavPendingProvider>{ui}</NavPendingProvider>);
 
 /**
  * The island is deliberately dumb — every target URL is built on the server —
@@ -19,13 +25,13 @@ const options = [
 
 describe("RowsPerPageSelect", () => {
   it("shows the current value", () => {
-    render(<RowsPerPageSelect value={50} options={options} />);
+    renderSelect(<RowsPerPageSelect value={50} options={options} />);
 
     expect(screen.getByLabelText("Rows per page")).toHaveTextContent("50");
   });
 
   it("pushes the href it was given, page and all left to the server", () => {
-    render(<RowsPerPageSelect value={10} options={options} />);
+    renderSelect(<RowsPerPageSelect value={10} options={options} />);
 
     fireEvent.click(screen.getByLabelText("Rows per page"));
     // Base UI commits a Select item off the whole pointer sequence, not a bare

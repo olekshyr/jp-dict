@@ -69,6 +69,7 @@ function PaginationLink({
 function PaginationPrevious({
   className,
   text = "Previous",
+  children,
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
@@ -80,6 +81,9 @@ function PaginationPrevious({
     >
       <ChevronLeftIcon data-icon="inline-start" />
       <span className="hidden sm:block">{text}</span>
+      {/* Appended rather than replaced, so a caller can slot an extra adornment
+          (the pending spinner) in without losing the chevron and label. */}
+      {children}
     </PaginationLink>
   )
 }
@@ -87,6 +91,7 @@ function PaginationPrevious({
 function PaginationNext({
   className,
   text = "Next",
+  children,
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
@@ -98,6 +103,7 @@ function PaginationNext({
     >
       <span className="hidden sm:block">{text}</span>
       <ChevronRightIcon data-icon="inline-end" />
+      {children}
     </PaginationLink>
   )
 }

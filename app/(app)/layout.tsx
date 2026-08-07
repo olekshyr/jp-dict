@@ -11,6 +11,7 @@ import {
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/app/theme-toggle";
 import { NavLink } from "./nav-link";
+import { NavPendingProvider } from "./nav-pending";
 
 /**
  * Redirects signed-out users to the sign-in page.
@@ -76,8 +77,15 @@ export default function AppLayout({
           component receiving an already-server-rendered `children` slot, so
           wrapping it here doesn't pull this layout's own render into the
           request-time (non-cacheable) part of the tree.
+
+          `NavPendingProvider` sits here for the same reason and one more: a
+          provider owned by a page would be torn down by the very navigation it
+          is reporting on. Every route under (app) navigates by URL, so every
+          route needs it.
         */}
-        <MotionConfig reducedMotion="user">{children}</MotionConfig>
+        <MotionConfig reducedMotion="user">
+          <NavPendingProvider>{children}</NavPendingProvider>
+        </MotionConfig>
       </main>
     </div>
   );

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { paginationHref } from "@/lib/pagination";
 import type { WordStatus } from "@/lib/user-words/queries";
+import { LinkPending } from "../link-pending";
 import { useListCounts } from "./list-session";
 
 const FILTERS: Array<{ value: WordStatus | "all"; label: string }> = [
@@ -34,6 +35,7 @@ export function ListFilterTabs({
             f.value === "all"
               ? counts.todo + counts.learned
               : counts[f.value as WordStatus];
+          const isActive = filter === f.value;
           return (
             <TabsTrigger
               key={f.value}
@@ -45,14 +47,27 @@ export function ListFilterTabs({
               // the page: a different filter is a different list, so it starts
               // at the top.
               render={
-                filter == f.value ? <span /> :
-                  (
-                    <Link href={paginationHref("/list", { filter: f.value, perPage })} />
-                  )
+                isActive ? (
+                  <span />
+                ) : (
+                  <Link
+                    href={paginationHref("/list", {
+                      filter: f.value,
+                      perPage,
+                    })}
+                  />
+                )
               }
             >
               {f.label}
               <Badge variant="secondary">{count}</Badge>
+              {/*
+                Only the inactive tabs are links, and only a link has a pending
+                state to report. Reporting with no spinner of its own: the tab
+                already carries a count badge, so the feedback for a filter
+                click is the rows below dimming.
+              */}
+              {!isActive && <LinkPending spinner={false} />}
             </TabsTrigger>
           );
         })}

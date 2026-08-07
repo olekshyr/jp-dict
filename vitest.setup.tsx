@@ -3,6 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+import { resetLink } from "./test/next-link";
 import { resetNavigation } from "./test/next-navigation";
 
 /*
@@ -16,7 +17,9 @@ import { resetNavigation } from "./test/next-navigation";
  *   - `next/navigation`'s hooks throw outside a Next runtime.
  *   - `next/link` pulls in Next's client router internals and an app-router
  *     context that does not exist here. Every assertion is on the rendered
- *     href, so a plain anchor loses nothing.
+ *     href, so a plain anchor loses nothing. It also has to supply
+ *     `useLinkStatus`, which <LinkPending> calls and which only exists inside
+ *     a real router.
  *   - `lucide-react` is a barrel that evaluates the whole icon set per test
  *     file, and no test cares which glyph came out.
  *
@@ -35,15 +38,7 @@ vi.mock("@/app/actions/words", () => ({
 
 vi.mock("next/navigation", async () => await import("./test/next-navigation"));
 
-// Every href in this app is a string, so the stub does not bother with
-// next/link's UrlObject form — one showing up would render visibly wrong.
-vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: React.ComponentProps<"a">) => (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  ),
-}));
+vi.mock("next/link", async () => await import("./test/next-link"));
 
 vi.mock("lucide-react", () => {
   const stubs = new Map<string, React.ComponentType<{ className?: string }>>();
@@ -98,5 +93,6 @@ afterEach(() => {
   // doesn't give us.
   cleanup();
   resetNavigation();
+  resetLink();
   vi.resetAllMocks();
 });

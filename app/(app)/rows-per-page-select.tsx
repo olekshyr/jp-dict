@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSearchPending } from "./search-pending";
+import { useNavPending } from "./nav-pending";
 
 /**
  * Picks how many rows a page shows.
@@ -20,9 +20,9 @@ import { useSearchPending } from "./search-pending";
  * rendering up to the nearest Suspense boundary, the same reason <SearchField>
  * keeps its own URL read in <SearchBox>.
  *
- * Navigating inside the shared transition means the search page dims its stale
- * rows while the new page size loads. On the list, where no provider is mounted,
- * `useSearchPending` falls back to a private transition and this is inert.
+ * Navigating inside the shared transition is what dims the stale rows while the
+ * new page size loads. The provider is mounted in the (app) layout, so this
+ * works the same on the list as on the search page.
  */
 export function RowsPerPageSelect({
   value,
@@ -34,7 +34,7 @@ export function RowsPerPageSelect({
   className?: string;
 }>) {
   const router = useRouter();
-  const { startSearch } = useSearchPending();
+  const { startNavigation } = useNavPending();
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
@@ -52,7 +52,7 @@ export function RowsPerPageSelect({
         onValueChange={(next) => {
           const target = options.find((option) => option.value === next);
           if (!target) return;
-          startSearch(() => router.push(target.href));
+          startNavigation(() => router.push(target.href));
         }}
       >
         <SelectTrigger size="sm" aria-label="Rows per page">

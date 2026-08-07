@@ -21,11 +21,31 @@ import { ListFilterTabs } from "./list-filter-tabs";
 import { ListRow } from "./list-row";
 import { ListSession } from "./list-session";
 import { PaginationBar } from "../pagination-bar";
+import { PendingContent } from "../pending-content";
 import { SaveButton } from "../save-button";
 import { StatusButton } from "../status-button";
 import { WordItem } from "../word-item";
 
 type ListPageParams = { filter?: string; page?: string; perPage?: string };
+
+/**
+ * Validates at dev and build time that the boundaries here still produce an
+ * instant shell — a misplaced one otherwise silently makes navigation block on
+ * the server instead of failing loudly, which is exactly how the filter tabs
+ * came to have no loading state at all.
+ *
+ * `runtime` rather than `static` because this route reads `?filter`, `?page`
+ * and `?perPage`, so validation needs concrete samples. Every param the route
+ * reads has to appear in every sample, `null` where it should be absent.
+ */
+export const unstable_instant = {
+  prefetch: "runtime",
+  samples: [
+    { searchParams: { filter: null, page: null, perPage: null } },
+    { searchParams: { filter: "learned", page: null, perPage: null } },
+    { searchParams: { filter: "all", page: "2", perPage: "50" } },
+  ],
+};
 
 function parseFilter(raw?: string): WordStatus | "all" {
   return raw === "learned" || raw === "all" ? raw : "todo";
@@ -89,7 +109,9 @@ async function WordList({
           </EmptyHeader>
         </Empty>
       ) : (
-        <>
+        // The tab strip stays outside this: it has to remain interactive so a
+        // second filter click isn't blocked by the first one still loading.
+        <PendingContent>
           <ItemGroup>
             {words.map((word) => (
               <ListRow key={word.entryId} filter={filter} status={word.status}>
@@ -114,7 +136,7 @@ async function WordList({
             perPage={perPage}
             total={total}
           />
-        </>
+        </PendingContent>
       )}
     </ListSession>
   );

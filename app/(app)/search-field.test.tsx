@@ -2,8 +2,16 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { router } from "@/test/next-navigation";
+import { NavPendingProvider } from "./nav-pending";
 import { SearchField } from "./search-field";
-import { SearchPendingProvider } from "./search-pending";
+
+/**
+ * The provider is mounted in the (app) layout in the real app, so every render
+ * here goes through it. `useNavPending` throws without one — asserted below,
+ * since that is the point of dropping the old fallback-to-private-transition.
+ */
+const renderField = (ui: React.ReactElement) =>
+  render(<NavPendingProvider>{ui}</NavPendingProvider>);
 
 const submit = async (query: string) => {
   const input = screen.getByLabelText("Search the dictionary");
@@ -15,21 +23,21 @@ const submit = async (query: string) => {
 
 describe("SearchField", () => {
   it("navigates to the search page with the query", async () => {
-    render(<SearchField />);
+    renderField(<SearchField />);
     await submit("neko");
 
     expect(router.push).toHaveBeenCalledExactlyOnceWith("/search?q=neko");
   });
 
   it("trims the query", async () => {
-    render(<SearchField />);
+    renderField(<SearchField />);
     await submit("  neko  ");
 
     expect(router.push).toHaveBeenCalledExactlyOnceWith("/search?q=neko");
   });
 
   it("carries a non-default page size across a new query", async () => {
-    render(<SearchField perPage={50} />);
+    renderField(<SearchField perPage={50} />);
     await submit("neko");
 
     expect(router.push).toHaveBeenCalledExactlyOnceWith(
@@ -38,54 +46,41 @@ describe("SearchField", () => {
   });
 
   it("leaves the default page size out of the URL", async () => {
-    render(<SearchField perPage={10} />);
+    renderField(<SearchField perPage={10} />);
     await submit("neko");
 
     expect(router.push).toHaveBeenCalledExactlyOnceWith("/search?q=neko");
   });
 
   it("drops the page number — a new result set starts at the top", async () => {
-    render(<SearchField perPage={50} />);
+    renderField(<SearchField perPage={50} />);
     await submit("neko");
 
     expect(String(router.push.mock.lastCall?.[0])).not.toContain("page=");
   });
 
   it("goes to the bare search page on an empty query", async () => {
-    render(<SearchField />);
+    renderField(<SearchField />);
     await submit("   ");
 
     expect(router.push).toHaveBeenCalledExactlyOnceWith("/search");
   });
 
   it("seeds the field from defaultValue", () => {
-    render(<SearchField defaultValue="cat" />);
+    renderField(<SearchField defaultValue="cat" />);
 
     expect(screen.getByLabelText("Search the dictionary")).toHaveValue("cat");
   });
 
-  it("works without a SearchPendingProvider, on its own transition", async () => {
-    // Entry pages mount the field with no results list to dim; the hook falls
-    // back to a private transition rather than throwing.
-    render(<SearchField />);
-    await submit("neko");
-
-    expect(router.push).toHaveBeenCalledExactlyOnceWith("/search?q=neko");
-  });
-
-  it("shares the provider's transition when one is mounted", async () => {
-    render(
-      <SearchPendingProvider>
-        <SearchField />
-      </SearchPendingProvider>,
-    );
-    await submit("neko");
-
-    expect(router.push).toHaveBeenCalledExactlyOnceWith("/search?q=neko");
+  it("refuses to mount outside a NavPendingProvider", () => {
+    // The provider is in the (app) layout, so an absent one means the field has
+    // been mounted somewhere it cannot report a navigation from. Failing loudly
+    // beats silently losing the spinner.
+    expect(() => render(<SearchField />)).toThrow(/NavPendingProvider/);
   });
 
   it("marks the form idle once the navigation has settled", async () => {
-    render(<SearchField />);
+    renderField(<SearchField />);
     await submit("neko");
 
     expect(

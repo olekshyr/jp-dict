@@ -65,6 +65,17 @@ owning its deck, `/list`'s two-context delta session, per-row removal —
 is design and rationale in
 `docs/superpowers/specs/2026-08-04-optimistic-writes-design.md`.
 
+**A search-param navigation gets no free loading state.** Changing only `?q`,
+`?filter` or `?page` reuses the `<Suspense>` boundary that is already mounted,
+so React holds the old rows on screen for the whole round-trip rather than
+falling back to the skeleton — the route looks idle while it works. Prefetching
+does not help: under `cacheComponents` a prefetch fetches the static shell, and
+every list on this app is per-user and uncached, so there is nothing to warm.
+`NavPendingProvider` in the `(app)` layout is the answer, and every navigating
+control must feed it — `startNavigation` for `router.push` callers, a
+`<LinkPending>` inside the anchor for `<Link>`s. `<PendingContent>` reads the
+flag and dims what is about to be replaced.
+
 **Authorization lives in the data layer.** `proxy.ts` (Next 16's renamed
 `middleware`) runs `clerkMiddleware()` and protects nothing — it can be
 CDN-bypassed. Every function in `lib/user-words/` and every Server Action calls
@@ -224,6 +235,17 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   input must never be one — with `cacheLife('max')` that is unbounded permanent
   entries. `searchEntries` is deliberately *not* cached itself: it clamps the
   query and delegates to a cached inner function, which is the pattern to copy.
+- **`useLinkStatus` is the only way to observe a `<Link>` click**, and it must
+  be called from a descendant of that `<Link>`. An `onClick` is not a
+  substitute: it also fires for ⌘-click and middle-click, which open a new tab
+  and never navigate, so the UI would stay pending forever. Report upward from
+  an effect — updates scheduled inside the router's transition are withheld
+  until it commits, which is the very thing being covered.
+- **`unstable_instant` is a build-time assertion, not a runtime feature.** It
+  costs nothing at runtime and fails the build when a boundary moves somewhere
+  that would block navigation. `/search` and `/list` both export it; a route
+  reading search params needs the `runtime` form with every param present in
+  every sample and `null` where absent.
 - **`refresh()` re-runs uncached queries, so it does not "refresh" a
   randomly-ordered one — it redraws it.** `getReviewCards` is
   `ORDER BY random() LIMIT 20`, so a refresh mid-session returned a different

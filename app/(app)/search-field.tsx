@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { LoaderCircleIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { paginationHref } from "@/lib/pagination";
 import { Input } from "@/components/ui/input";
-import { useSearchPending } from "./search-pending";
+import { Spinner } from "@/components/ui/spinner";
+import { useNavPending } from "./nav-pending";
 
 /**
  * The search box itself, with no knowledge of the current URL. Seeding it from
@@ -31,7 +31,7 @@ export function SearchField({
   disabled?: boolean;
 }>) {
   const router = useRouter();
-  const { pending, startSearch } = useSearchPending();
+  const { pending, startNavigation } = useNavPending();
 
   return (
     <form
@@ -48,7 +48,7 @@ export function SearchField({
         // The page size survives a new query; the page number does not — a new
         // result set starts at the top. `paginationHref` drops the default page
         // size, so the common case stays a clean `?q=`.
-        startSearch(() => {
+        startNavigation(() => {
           router.push(paginationHref("/search", { q: next, perPage }));
         });
       }}
@@ -74,12 +74,17 @@ export function SearchField({
 
           The field stays enabled while pending — disabling it would pull focus
           out mid-search.
+
+          <Spinner> spins unconditionally, so idle passes `animate-none` for
+          tailwind-merge to drop it: no animation ticking behind opacity-0. It
+          also carries its own `role="status"`, which `aria-hidden` takes back —
+          the form's `aria-busy` is what announces this navigation, once.
         */}
-        <LoaderCircleIcon
+        <Spinner
           aria-hidden
           className={cn(
-            "pointer-events-none absolute top-1/2 right-4 size-4 -translate-y-1/2 text-muted-foreground transition-opacity duration-200",
-            pending ? "animate-spin opacity-100 delay-150" : "opacity-0",
+            "pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-muted-foreground transition-opacity duration-200",
+            pending ? "opacity-100 delay-150" : "animate-none opacity-0",
           )}
         />
       </div>

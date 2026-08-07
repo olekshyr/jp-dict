@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { removeWord, setStatus } from "@/app/actions/words";
+import { NavPendingProvider } from "../nav-pending";
 import { ListFilterTabs } from "./list-filter-tabs";
 import { useRow } from "../row-context";
 import { ListRow } from "./list-row";
@@ -114,7 +115,9 @@ function runCountOf(onRun: RenderSpy, id: string) {
 function list(onRender: RenderSpy, onRun: RenderSpy, filter: "todo" | "all" = "todo") {
   return (
     <ListSession counts={{ todo: 3, learned: 0 }}>
-      <ListFilterTabs filter={filter} perPage={20} />
+      <NavPendingProvider>
+        <ListFilterTabs filter={filter} perPage={20} />
+      </NavPendingProvider>
       {["a", "b", "c"].map((id) => (
         <CountedRow key={id} id={id} onRun={onRun} filter={filter} status="todo">
           <RenderCount onRender={onRender} id={id} />
@@ -174,7 +177,9 @@ describe("ListRow", () => {
   it("removes a row that leaves the learned filter", async () => {
     render(
       <ListSession counts={{ todo: 0, learned: 2 }}>
-        <ListFilterTabs filter="learned" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="learned" perPage={20} />
+        </NavPendingProvider>
         <ListRow filter="learned" status="learned">
           <span>row d</span>
           <RowControlsTo label="d" to="todo" />
@@ -247,7 +252,9 @@ describe("ListRow", () => {
     vi.mocked(setStatus).mockRejectedValueOnce(new Error("offline"));
     render(
       <ListSession counts={{ todo: 3, learned: 0 }}>
-        <ListFilterTabs filter="todo" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="todo" perPage={20} />
+        </NavPendingProvider>
         <ListRow filter="todo" status="todo">
           <StatusButton entryId={1} status="todo" />
         </ListRow>
@@ -282,7 +289,9 @@ describe("ListRow", () => {
     vi.mocked(removeWord).mockRejectedValueOnce(new Error("offline"));
     render(
       <ListSession counts={{ todo: 3, learned: 0 }}>
-        <ListFilterTabs filter="todo" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="todo" perPage={20} />
+        </NavPendingProvider>
         <ListRow filter="todo" status="todo">
           <SaveButton entryId={1} saved />
         </ListRow>
@@ -315,7 +324,9 @@ describe("ListRow", () => {
   it("removes the row from the page when the status write succeeds", async () => {
     render(
       <ListSession counts={{ todo: 3, learned: 0 }}>
-        <ListFilterTabs filter="todo" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="todo" perPage={20} />
+        </NavPendingProvider>
         <ListRow filter="todo" status="todo">
           <StatusButton entryId={1} status="todo" />
         </ListRow>
@@ -344,7 +355,9 @@ describe("ListRow", () => {
   it("removes the row from the page when the save write succeeds", async () => {
     render(
       <ListSession counts={{ todo: 3, learned: 0 }}>
-        <ListFilterTabs filter="todo" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="todo" perPage={20} />
+        </NavPendingProvider>
         <ListRow filter="todo" status="todo">
           <SaveButton entryId={1} saved />
         </ListRow>
@@ -380,7 +393,9 @@ describe("ListRow", () => {
 
     render(
       <ListSession counts={{ todo: 3, learned: 0 }}>
-        <ListFilterTabs filter="all" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="all" perPage={20} />
+        </NavPendingProvider>
         <ListRow filter="all" status="todo">
           <StatusButton entryId={1} status="todo" />
           <SaveButton entryId={1} saved />

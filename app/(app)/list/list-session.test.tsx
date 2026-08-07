@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { NavPendingProvider } from "../nav-pending";
 import { ListFilterTabs } from "./list-filter-tabs";
 import { ListSession, useListDispatch } from "./list-session";
 
@@ -34,7 +35,9 @@ describe("ListSession", () => {
   it("renders server counts plus this session's deltas", () => {
     render(
       <ListSession counts={{ todo: 3, learned: 1 }}>
-        <ListFilterTabs filter="todo" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="todo" perPage={20} />
+        </NavPendingProvider>
         <MoveOne />
       </ListSession>,
     );
@@ -54,7 +57,9 @@ describe("ListSession", () => {
 
     render(
       <ListSession counts={{ todo: 3, learned: 1 }}>
-        <ListFilterTabs filter="todo" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="todo" perPage={20} />
+        </NavPendingProvider>
         <DispatchProbe onRender={onRender} />
         <MoveOne />
       </ListSession>,
@@ -71,7 +76,9 @@ describe("ListSession", () => {
   it("drops pending deltas when the key changes", () => {
     const session = (key: string) => (
       <ListSession key={key} counts={{ todo: 3, learned: 1 }}>
-        <ListFilterTabs filter="todo" perPage={20} />
+        <NavPendingProvider>
+          <ListFilterTabs filter="todo" perPage={20} />
+        </NavPendingProvider>
         <MoveOne />
       </ListSession>
     );

@@ -15,6 +15,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { LinkPending } from "./link-pending";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 
 /**
@@ -56,7 +57,14 @@ export function PaginationBar({
         <PaginationContent>
           <PaginationItem>
             {page > 1 ? (
-              <PaginationPrevious render={<Link href={pageHref(page - 1)} />} />
+              // `relative` anchors the pending spinner, which is positioned out
+              // of flow so a page number stays a 36px square while it loads.
+              <PaginationPrevious
+                className="relative"
+                render={<Link href={pageHref(page - 1)} />}
+              >
+                <LinkPending />
+              </PaginationPrevious>
             ) : (
               // Rendered as an inert span rather than dropped, so the bar keeps
               // its width and the page numbers don't shift on the first page.
@@ -76,10 +84,14 @@ export function PaginationBar({
             ) : (
               <PaginationItem key={item}>
                 <PaginationLink
+                  className="relative"
                   isActive={item === page}
                   render={<Link href={pageHref(item)} />}
                 >
                   {item}
+                  {/* The current page is still a link, but clicking it starts
+                      no navigation, so it gets no pending state. */}
+                  {item !== page && <LinkPending />}
                 </PaginationLink>
               </PaginationItem>
             ),
@@ -87,7 +99,12 @@ export function PaginationBar({
 
           <PaginationItem>
             {page < totalPages ? (
-              <PaginationNext render={<Link href={pageHref(page + 1)} />} />
+              <PaginationNext
+                className="relative"
+                render={<Link href={pageHref(page + 1)} />}
+              >
+                <LinkPending />
+              </PaginationNext>
             ) : (
               <PaginationNext
                 aria-disabled
