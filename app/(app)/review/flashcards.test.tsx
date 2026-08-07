@@ -82,11 +82,12 @@ describe("Flashcards", () => {
     it("swaps to the back and relabels the card", () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      expect(screen.getByText(/Tap to reveal/)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Reveal answer" }),
+      ).toBeInTheDocument();
       flip();
 
       expect(screen.getByText("gloss-1")).toBeInTheDocument();
-      expect(screen.getByText(/Tap to hide/)).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "Show front" }),
       ).toBeInTheDocument();
@@ -131,7 +132,11 @@ describe("Flashcards", () => {
       flip();
       await press("Skip");
 
-      expect(screen.getByText(/Tap to reveal/)).toBeInTheDocument();
+      // Under `mode="wait"` the incoming card mounts only once the outgoing
+      // one's exit settles, so the label has to be awaited rather than read.
+      expect(
+        await screen.findByRole("button", { name: "Reveal answer" }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -143,6 +148,27 @@ describe("Flashcards", () => {
 
       expect(setStatus).toHaveBeenCalledExactlyOnceWith(1, "learned");
       expect(screen.getByText(/2 left/)).toBeInTheDocument();
+    });
+
+    // The whole point of the optimistic layer. Scheduling these updates inside
+    // the async `startTransition` instead makes them part of the Action, and
+    // React withholds them until it settles — the card then sits on screen for
+    // the entire write round-trip, which is what this guards against.
+    it("drops the card on click, without waiting for the write", async () => {
+      let settle!: () => void;
+      vi.mocked(setStatus).mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+      );
+
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "I know this" }));
+      });
+
+      expect(screen.getByText(/2 left/)).toBeInTheDocument();
+      await act(async () => settle());
     });
 
     it("holds the index so the next card slides into place", async () => {

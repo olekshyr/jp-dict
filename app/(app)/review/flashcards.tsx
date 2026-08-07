@@ -98,6 +98,28 @@ export function Flashcards({
 
   const card = deck[index];
 
+  function handleLearnedCard() {
+    const removed = card;
+    const at = index;
+    setIndex((i) => (i >= deck.length - 1 ? 0 : i));
+    setDeck((d) => d.filter((c) => c.entryId !== removed.entryId));
+    setFlipped(false);
+    startTransition(async () => {
+      try {
+        await setStatus(removed.entryId, "learned");
+      } catch (error) {
+        console.error(error);
+        setDeck((d) => [...d.slice(0, at), removed, ...d.slice(at)]);
+        setIndex(at);
+        toast.add({
+          type: "error",
+          title: "Couldn't save",
+          description: "Check your connection and try again.",
+        });
+      }
+    });
+  }
+
   /** Move to the next card, wrapping past the end. */
   function advance() {
     setFlipped(false);
@@ -190,31 +212,7 @@ export function Flashcards({
         </Button>
         <Button
           type="button"
-          onClick={() => {
-            const removed = card;
-            const at = index;
-            startTransition(async () => {
-              // Dropping this card shifts the next one into the current index,
-              // so hold position — only wrap when this was the last card.
-              setIndex((i) => (i >= deck.length - 1 ? 0 : i));
-              setDeck((d) => d.filter((c) => c.entryId !== removed.entryId));
-              setFlipped(false);
-              try {
-                await setStatus(removed.entryId, "learned");
-              } catch (error) {
-                console.error(error);
-                // Back to exactly where it was, index included: the user is
-                // mid-session and a card reappearing elsewhere reads as a bug.
-                setDeck((d) => [...d.slice(0, at), removed, ...d.slice(at)]);
-                setIndex(at);
-                toast.add({
-                  type: "error",
-                  title: "Couldn't save",
-                  description: "Check your connection and try again.",
-                });
-              }
-            });
-          }}
+          onClick={handleLearnedCard}
         >
           I know this
         </Button>

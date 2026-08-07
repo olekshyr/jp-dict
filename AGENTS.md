@@ -206,6 +206,13 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   because Server Actions no longer refresh the route. Reading the prop again
   after a write would show pre-write data. They roll back explicitly in a
   `catch` instead of letting a transition settle.
+- **An optimistic update must be scheduled *outside* `startTransition`.** An
+  async `startTransition` callback is a React Action, and updates scheduled
+  inside one are withheld until its promise settles — so an "optimistic" write
+  put there is not optimistic at all: the UI freezes for the whole round-trip.
+  `SaveButton`, `StatusButton` and `Flashcards` all set state first and wrap
+  only the `await` plus the rollback. `useTransition`'s `isPending` still
+  reports correctly either way, which is what makes the mistake easy to miss.
 - Base UI's `Select` commits an item off the full pointer sequence
   (pointerdown → pointerup → mouseup → click), not a bare `fireEvent.click`.
 - **`Number.isInteger` is not a bound on a number from the URL.** `1e21` passes
