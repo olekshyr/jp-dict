@@ -16,6 +16,10 @@ import {
  * in as `children`. The link stays *inside* the row rather than wrapping it —
  * `Item` can render as an anchor, but that would nest the action buttons in an
  * <a>.
+ *
+ * `footer` is the same idea one level in: /list hangs the note under the gloss,
+ * and it has to sit outside the link for exactly the same reason the buttons
+ * do. /search passes none and renders unchanged.
  */
 export function WordItem({
   entryId,
@@ -24,6 +28,7 @@ export function WordItem({
   romaji,
   glossSummary,
   isCommon = false,
+  footer,
   children,
 }: {
   entryId: number;
@@ -32,6 +37,7 @@ export function WordItem({
   romaji: string;
   glossSummary: string;
   isCommon?: boolean;
+  footer?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
@@ -63,6 +69,7 @@ export function WordItem({
           </div>
           <ItemDescription>{glossSummary}</ItemDescription>
         </Link>
+        {footer}
       </ItemContent>
       <ItemActions className="flex-col items-end gap-1.5">
         {children}

@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ListFilterTabs } from "./list-filter-tabs";
 import { ListRow } from "./list-row";
 import { ListSession } from "./list-session";
+import { RowNote } from "./row-note";
 import { PaginationBar } from "../pagination-bar";
 import { PendingContent } from "../pending-content";
 import { SaveButton } from "../save-button";
@@ -121,6 +122,9 @@ async function WordList({
                   reading={word.reading}
                   romaji={word.romaji}
                   glossSummary={word.glossSummary}
+                  footer={
+                    <RowNote entryId={word.entryId} note={word.note} />
+                  }
                 >
                   <StatusButton entryId={word.entryId} status={word.status} />
                   <SaveButton entryId={word.entryId} saved />

@@ -262,6 +262,18 @@ export const userWords = pgTable(
     learnedAt: timestamp("learned_at", { withTimezone: true }),
 
     /*
+     * The user's own note on this word — a translation into their language, a
+     * mnemonic, a usage remark. The only free-form user text the app stores.
+     *
+     * Nullable rather than `default ''`: "no note" and "empty note" are the
+     * same thing to the UI, and NULL keeps the row narrow for the majority who
+     * never write one. Deliberately unindexed — it is only ever projected
+     * alongside a row already found by `user_id`, never filtered or searched
+     * on. Length is capped in the Server Action, not here; see `noteSchema`.
+     */
+    note: text("note"),
+
+    /*
      * SRS scheduling, unused by the MVP. Present and nullable from day one so
      * SM-2/FSRS can be layered on without a migration.
      */

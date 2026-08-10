@@ -6,8 +6,10 @@ import { describeTag } from "@/lib/dictionary/tags";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RequireAuth } from "../../require-auth";
+import { SavedProvider } from "../../saved-context";
 import { SearchField } from "../../search-field";
 import { parseEntryId } from "./entry-id";
+import { EntryNote } from "./entry-note";
 import { EntrySaveButton } from "./entry-save-button";
 import { RubyWord } from "./ruby-word";
 
@@ -46,17 +48,20 @@ function TagList({ tags }: { tags: string[] }) {
 }
 
 /**
- * `saveSlot` is a pass-through slot, not data. Nothing in this body reads it, so
- * it never becomes part of the cache entry — the cached markup keeps a hole that
- * the caller's own <Suspense> fills at request time. That is what lets a
- * per-user control sit inside markup shared by every user.
+ * `saveSlot` and `noteSlot` are pass-through slots, not data. Nothing in this
+ * body reads them, so they never become part of the cache entry — the cached
+ * markup keeps holes that the caller's own <Suspense> boundaries fill at
+ * request time. That is what lets per-user content sit inside markup shared by
+ * every user.
  */
 async function EntryBody({
   id,
   saveSlot,
+  noteSlot,
 }: {
   id: string;
   saveSlot: React.ReactNode;
+  noteSlot: React.ReactNode;
 }) {
   "use cache";
 
@@ -128,6 +133,8 @@ async function EntryBody({
         )}
       </header>
 
+      {noteSlot}
+
       <ol className="space-y-6">
         {entry.senses.map((sense, i) => (
           <li key={i} className="flex gap-4">
@@ -190,27 +197,47 @@ export default function EntryPage({
             already goes through requireUserId.
           */
           <RequireAuth>
-            <EntryBody
-              id={id}
-              saveSlot={
-                /*
-                  Its own boundary, outside the cached body: reading whether this
-                  user saved the entry is request-time work, and doing it inline
-                  would make the shared entry markup unshareable.
-                */
-                <Suspense
-                  // Explicit `key` because this element is built here as a prop
-                  // and only lands among <div>'s children inside the cached body.
-                  // React marks elements written as literal JSX children as
-                  // key-checked; one that arrives across the cache boundary misses
-                  // that pass and gets reported as an unkeyed list child.
-                  key="save"
-                  fallback={<Skeleton className="h-9 w-[4.5rem] rounded-md" />}
-                >
-                  <EntrySaveButton id={id} />
-                </Suspense>
-              }
-            />
+            {/*
+              Wraps the whole body so the save toggle and the note panel — which
+              the cached markup keeps far apart — agree on whether this entry is
+              saved. Without it, saving here would leave the note area missing
+              until a reload, because SaveButton owns that state privately.
+            */}
+            <SavedProvider>
+              <EntryBody
+                id={id}
+                saveSlot={
+                  /*
+                    Its own boundary, outside the cached body: reading whether
+                    this user saved the entry is request-time work, and doing it
+                    inline would make the shared entry markup unshareable.
+                  */
+                  <Suspense
+                    // Explicit `key` because this element is built here as a prop
+                    // and only lands among <div>'s children inside the cached body.
+                    // React marks elements written as literal JSX children as
+                    // key-checked; one that arrives across the cache boundary misses
+                    // that pass and gets reported as an unkeyed list child.
+                    key="save"
+                    fallback={<Skeleton className="h-9 w-[4.5rem] rounded-md" />}
+                  >
+                    <EntrySaveButton id={id} />
+                  </Suspense>
+                }
+                noteSlot={
+                  // Same arrangement, and a second query rather than one shared
+                  // with the save button: the two land in different places in
+                  // the cached markup, so neither can render the other.
+                  //
+                  // `null` rather than a skeleton: this resolves to nothing at
+                  // all for a word the user hasn't saved, and a placeholder that
+                  // vanishes reads worse than one that was never there.
+                  <Suspense key="note" fallback={null}>
+                    <EntryNote id={id} />
+                  </Suspense>
+                }
+              />
+            </SavedProvider>
           </RequireAuth>
         ))}
       </Suspense>

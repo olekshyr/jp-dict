@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { addWord, removeWord } from "@/app/actions/words";
 import { toast } from "@/components/ui/toast";
 import { SaveButton } from "./save-button";
+import { SavedProvider, useSaved } from "./saved-context";
 
 /**
  * The `saved` prop is an initial value, not a live one: the button holds its own
@@ -77,4 +78,32 @@ describe("SaveButton", () => {
       expect.objectContaining({ type: "error" }),
     );
   });
+
+  /*
+   * On /entry/[id] the note panel is a sibling that appears and vanishes with
+   * this toggle, so the flip is published to <SavedProvider> as well as held
+   * locally — and a failed write has to take both back. Everywhere else
+   * `useSaved()` is null and none of this runs.
+   */
+  it("takes the shared saved state back when the write fails", async () => {
+    vi.mocked(addWord).mockRejectedValueOnce(new Error("offline"));
+    vi.spyOn(toast, "add").mockReturnValue("toast-id");
+
+    render(
+      <SavedProvider>
+        <SaveButton entryId={42} saved={false} />
+        <Saved />
+      </SavedProvider>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    });
+
+    expect(screen.getByTestId("shared")).toHaveTextContent("false");
+  });
 });
+
+/** Reads back whatever the button published, so the test can assert on it. */
+function Saved() {
+  return <span data-testid="shared">{String(useSaved()?.saved)}</span>;
+}

@@ -17,6 +17,7 @@ export type SavedWord = {
   romaji: string;
   glossSummary: string;
   status: WordStatus;
+  note: string | null;
 };
 
 /** One flashcard. Only what the client component actually renders. */
@@ -48,10 +49,9 @@ export function isFrontMode(value: string): value is FrontMode {
  * No count comes back with it: the caller already has `getMyWordCounts()` for
  * the filter tabs, and those counts are the same totals pagination needs.
  *
- * Not cached. This is a single index-only scan on
- * `(user_id, status, added_at DESC)` — which serves the offset too — and
- * `use cache` is in-memory per instance on serverless, so it would add
- * invalidation complexity for a near-zero hit rate.
+ * Not cached. `(user_id, status, added_at DESC)` drives the scan and serves the
+ * offset too, and `use cache` is in-memory per instance on serverless, so it
+ * would add invalidation complexity for a near-zero hit rate.
  */
 export async function getMyWords(
   status: WordStatus | undefined,
@@ -64,6 +64,7 @@ export async function getMyWords(
     .select({
       entryId: userWords.entryId,
       status: userWords.status,
+      note: userWords.note,
       headword: entrySearch.headword,
       reading: entrySearch.reading,
       romaji: entrySearch.romaji,
@@ -87,6 +88,7 @@ export async function getMyWords(
     romaji: r.romaji,
     glossSummary: r.glossSummary,
     status: r.status as WordStatus,
+    note: r.note,
   }));
 }
 
@@ -134,6 +136,29 @@ export async function getSavedEntryIds(
     );
 
   return new Set(rows.map((r) => r.entryId));
+}
+
+/**
+ * The signed-in user's row for one entry, or null if they haven't saved it.
+ *
+ * Distinct from `getSavedEntryIds`, which answers set membership for a whole
+ * page of search results: this one carries the row's own per-user payload, so
+ * it is worth a separate call only where that payload is actually rendered.
+ * A single `(user_id, entry_id)` unique-index lookup.
+ */
+export async function getSavedWord(
+  entryId: number,
+): Promise<{ status: WordStatus; note: string | null } | null> {
+  const userId = await requireUserId();
+
+  const [row] = await db
+    .select({ status: userWords.status, note: userWords.note })
+    .from(userWords)
+    .where(and(eq(userWords.userId, userId), eq(userWords.entryId, entryId)))
+    .limit(1);
+
+  if (!row) return null;
+  return { status: row.status as WordStatus, note: row.note };
 }
 
 /** Unlearned words for a review session, shuffled. */

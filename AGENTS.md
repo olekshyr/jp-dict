@@ -252,6 +252,21 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   twenty and reset the "N left" counter. Client state seeded from a prop like
   that must own the value and ignore later props; see
   `app/(app)/review/flashcards.tsx`.
+- **`blur` does not fire when React unmounts a focused element.** A save-on-blur
+  control therefore loses the edit whenever its container closes — collapsing a
+  `/list` note, navigating away mid-edit. `NoteEditor` commits from an effect
+  cleanup, and that flush must *not* go through `startTransition`: the component
+  is gone, so its state updates are no-ops and a rollback has nothing to roll
+  back. It fires a plain promise whose `.catch` reaches the global toast
+  manager. For the same reason, a value the blur handler reads has to be
+  mirrored into a ref — Escape blurs the field in the very event that reverts
+  it, before React has applied the state.
+- **User-authored text is rendered as a React text child, never as HTML.**
+  `user_words.note` is the only free-form text the app stores. Rendering
+  newlines wants `whitespace-pre-wrap`, not `dangerouslySetInnerHTML`;
+  truncation wants `line-clamp`, not a slice that can split a surrogate pair.
+  The 2000-character cap in `noteSchema` is the control — a Server Action is
+  reachable by direct POST, so the textarea's `maxLength` is only a courtesy.
 
 ## Maintaining this file
 

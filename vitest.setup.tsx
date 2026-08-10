@@ -33,6 +33,7 @@ vi.mock("@/app/actions/words", () => ({
   addWord: vi.fn(async () => undefined),
   removeWord: vi.fn(async () => undefined),
   setStatus: vi.fn(async () => undefined),
+  setNote: vi.fn(async () => undefined),
   setFrontMode: vi.fn(async () => undefined),
 }));
 

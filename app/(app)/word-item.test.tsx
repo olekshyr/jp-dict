@@ -52,4 +52,14 @@ describe("WordItem", () => {
 
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
+
+  it("renders the footer outside the entry link", () => {
+    // /list hangs the note here. Nesting it in the anchor would make every
+    // click on the note navigate to the entry instead of opening the editor.
+    render(<WordItem {...base} footer={<button type="button">Note</button>} />);
+
+    const note = screen.getByRole("button", { name: "Note" });
+    expect(note).toBeInTheDocument();
+    expect(note.closest("a")).toBeNull();
+  });
 });

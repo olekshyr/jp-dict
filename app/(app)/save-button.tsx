@@ -6,6 +6,7 @@ import { addWord, removeWord } from "@/app/actions/words";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { useRow } from "./row-context";
+import { useSaved } from "./saved-context";
 
 export function SaveButton({
   entryId,
@@ -22,6 +23,9 @@ export function SaveButton({
   const [isSaved, setIsSaved] = useState(saved);
   const [pending, startTransition] = useTransition();
   const row = useRow();
+  // On /entry/[id] the note panel is a sibling that has to appear and vanish
+  // with this toggle; null everywhere else.
+  const entry = useSaved();
 
   return (
     <Button
@@ -33,6 +37,7 @@ export function SaveButton({
       onClick={() => {
         const next = !isSaved;
         setIsSaved(next);
+        entry?.setSaved(next);
         // On /list an unsave takes the row off the page; on /search there is no
         // row and this is a no-op.
         const token = !next ? row?.unsave() : undefined;
@@ -46,6 +51,7 @@ export function SaveButton({
           } catch (error) {
             console.error(error);
             setIsSaved(!next);
+            entry?.setSaved(!next);
             // Mirrors the forward guard above: only an unsave wrote an undo
             // for this row, so only an unsave's failure replays it.
             if (!next) row?.rollback(token);
