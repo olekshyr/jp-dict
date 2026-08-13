@@ -14,7 +14,7 @@ Three surfaces, three different answers:
 | Surface | Behaviour |
 |---|---|
 | `/entry/[id]` | Note visible and editable, open by default. Absent entirely when the word isn't saved. |
-| `/list` | Collapsed to its first line under the gloss; the preview *is* the toggle, and the editor opens in that same place. |
+| `/list` | Collapsed to its first line under the gloss; the preview *is* the toggle, and the editor opens in that same place. A word with no note shows nothing. |
 | `/review` | No note at all. Flashcards are unchanged. |
 
 This is the first feature that stores free-form user text and renders it back,
@@ -136,6 +136,13 @@ nesting the note in the anchor would make every click on it navigate away.
 round-trip, and `<NoteEditor onCommit>` feeds it both the commit and the
 rollback.
 
+**A word with no note renders nothing here.** The list surfaces notes that
+exist; it does not solicit them. An "Add note" affordance on every row of a list
+where most words have none is noise, and writing a first note is the entry
+page's job, where the field is open by default. The panel being open is part of
+that condition, so clearing a note mid-edit doesn't yank the field out from
+under the cursor — the row goes quiet only once it collapses.
+
 Notes touch neither counts nor row removal, so `RowNote` stays clear of `RowApi`
 entirely.
 
@@ -188,6 +195,8 @@ sends `""`), **Idle blur** (unchanged text writes nothing), **Rollback** (a
 rejected write restores the field, the `/list` preview, and fires an error
 toast), **Escape** (reverts without writing), **Unmount flush** (an edit still in
 the field when the row collapses is saved), **Reveal** (the note panel appears
-the moment Save is clicked and vanishes on unsave), **Footer placement** (the
-note is not inside the entry link), **Literal text** (markup in a note renders as
-text on both surfaces).
+the moment Save is clicked and vanishes on unsave), **Silence** (a `/list` row
+with no note renders nothing, and one whose note is cleared goes quiet on
+collapse rather than mid-edit), **Footer placement** (the note is not inside the
+entry link), **Literal text** (markup in a note renders as text on both
+surfaces).

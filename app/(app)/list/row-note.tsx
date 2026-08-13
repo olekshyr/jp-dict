@@ -11,6 +11,11 @@ import { NoteEditor } from "../note-editor";
  * The preview line is the toggle — clicking the note opens the very text you
  * clicked, and clicking again closes it. Truncation is CSS (`line-clamp-1`)
  * rather than a slice, which would happily cut a surrogate pair in half.
+ *
+ * A word without a note renders nothing at all: this surface exists to show
+ * notes that exist, and a row of "Add note" affordances on a list where most
+ * words have none is noise. Writing the first note is the entry page's job,
+ * where the field is open by default.
  */
 export function RowNote({
   entryId,
@@ -25,6 +30,11 @@ export function RowNote({
   const [current, setCurrent] = useState(note ?? "");
   const [open, setOpen] = useState(false);
   const panelId = useId();
+
+  // `open` is part of the condition so that clearing a note mid-edit doesn't
+  // yank the field out from under the cursor — the row keeps it until the user
+  // collapses it, and only then goes quiet.
+  if (!current && !open) return null;
 
   return (
     <div className="min-w-0">
@@ -42,10 +52,8 @@ export function RowNote({
         <NotebookPenIcon className="size-3.5 shrink-0" />
         {open ? (
           <span>Hide note</span>
-        ) : current ? (
-          <span className="line-clamp-1">{current}</span>
         ) : (
-          <span>Add note</span>
+          <span className="line-clamp-1">{current}</span>
         )}
       </button>
 

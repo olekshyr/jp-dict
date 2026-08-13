@@ -16,10 +16,13 @@ describe("RowNote", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("invites a note when there is none", () => {
-    render(<RowNote entryId={7} note={null} />);
+  // The list shows notes; it doesn't solicit them. A row of "Add note"
+  // affordances on a list where most words have none is noise, and the entry
+  // page is where a first note gets written.
+  it("renders nothing at all when there is no note", () => {
+    const { container } = render(<RowNote entryId={7} note={null} />);
 
-    expect(toggle()).toHaveTextContent("Add note");
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("opens the editor in place", () => {
@@ -55,8 +58,21 @@ describe("RowNote", () => {
     expect(toggle()).toHaveTextContent("counter: 匹");
   });
 
-  it("goes back to inviting a note once the note is cleared", async () => {
+  it("keeps the field open while a cleared note is still being edited", async () => {
     render(<RowNote entryId={7} note="ねこ = cat" />);
+
+    fireEvent.click(toggle());
+    fireEvent.change(field(), { target: { value: "" } });
+    await act(async () => {
+      fireEvent.blur(field());
+    });
+
+    // Clearing must not yank the field out from under the cursor mid-edit.
+    expect(field()).toBeInTheDocument();
+  });
+
+  it("goes quiet once a cleared note is collapsed", async () => {
+    const { container } = render(<RowNote entryId={7} note="ねこ = cat" />);
 
     fireEvent.click(toggle());
     fireEvent.change(field(), { target: { value: "" } });
@@ -65,7 +81,8 @@ describe("RowNote", () => {
     });
     fireEvent.click(toggle());
 
-    expect(toggle()).toHaveTextContent("Add note");
+    expect(setNote).toHaveBeenCalledExactlyOnceWith(7, "");
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("restores the previous preview when the write fails", async () => {
@@ -86,7 +103,7 @@ describe("RowNote", () => {
   // Collapsing unmounts the editor. Its cleanup flush is what keeps the edit,
   // since React fires no blur on the way out.
   it("saves an edit that is still in the field when the row collapses", async () => {
-    render(<RowNote entryId={7} note={null} />);
+    render(<RowNote entryId={7} note="ねこ = cat" />);
 
     fireEvent.click(toggle());
     fireEvent.change(field(), { target: { value: "counter: 匹" } });
