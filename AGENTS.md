@@ -268,6 +268,17 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   The 2000-character cap in `noteSchema` is the control — a Server Action is
   reachable by direct POST, so the textarea's `maxLength` is only a courtesy.
 
+- **The sans stack must keep its Japanese tail.** `--sans` / `--mono` in
+  `app/globals.css` end in real Japanese families because Inter and Geist Mono
+  are `latin`-subset only. Drop them and every kana/kanji falls to the
+  browser's last-resort face — Hiragino on macOS (fine, which is why the bug
+  hides there) but MS PGothic on Windows, whose embedded bitmaps look jagged
+  below ~20px. That is why it surfaced in the search field and note textarea
+  and not on entry pages: those render Japanese at `text-5xl`, where MS
+  PGothic switches to outlines. Fallback is per-glyph, so the tail costs Latin
+  text nothing. next/font must not claim the `--font-sans` name itself (it owns
+  `--font-inter`), or the composed stack cannot use it.
+
 ## Maintaining this file
 
 This file is the project's durable memory — it should grow as we work.
