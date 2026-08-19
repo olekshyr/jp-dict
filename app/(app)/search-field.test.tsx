@@ -87,4 +87,23 @@ describe("SearchField", () => {
       screen.getByLabelText("Search the dictionary").closest("form"),
     ).toHaveAttribute("aria-busy", "false");
   });
+
+  it("runs the query when the Search button is clicked", async () => {
+    renderField(<SearchField />);
+    const input = screen.getByLabelText("Search the dictionary");
+    fireEvent.change(input, { target: { value: "neko" } });
+    await act(async () => {
+      // A click, not a submit event: this is what would catch the button
+      // losing its `type="submit"` and quietly submitting nothing.
+      fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    });
+
+    expect(router.push).toHaveBeenCalledExactlyOnceWith("/search?q=neko");
+  });
+
+  it("disables the button along with the field", () => {
+    renderField(<SearchField disabled />);
+
+    expect(screen.getByRole("button", { name: "Search" })).toBeDisabled();
+  });
 });
