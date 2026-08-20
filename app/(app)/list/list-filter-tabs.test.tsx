@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import type { Counts, ListFilter } from "@/lib/srs/grades";
 import { setLinkPending } from "@/test/next-link";
 import { NavPendingProvider } from "../nav-pending";
 import { PendingContent } from "../pending-content";
@@ -17,9 +18,9 @@ import { ListSession } from "./list-session";
  */
 
 const renderTabs = (
-  filter: "todo" | "learned" | "all",
+  filter: ListFilter | "all",
   perPage = 10,
-  counts = { todo: 3, learned: 4 },
+  counts: Counts = { new: 3, learning: 4, mature: 2, retired: 1 },
 ) =>
   render(
     <NavPendingProvider>
@@ -34,33 +35,41 @@ const hrefOf = (label: string) =>
 
 describe("ListFilterTabs", () => {
   it("renders the active filter as plain text, not a link", () => {
-    renderTabs("todo");
+    renderTabs("new");
 
-    expect(screen.getByText("To learn").closest("a")).toBeNull();
-    expect(hrefOf("Learned")).toBe("/list?filter=learned");
+    expect(screen.getByText("New").closest("a")).toBeNull();
+    expect(hrefOf("Retired")).toBe("/list?filter=retired");
   });
 
   it("carries a non-default page size across a filter change", () => {
-    renderTabs("todo", 50);
+    renderTabs("new", 50);
 
-    expect(hrefOf("Learned")).toBe("/list?filter=learned&perPage=50");
+    expect(hrefOf("Mature")).toBe("/list?filter=mature&perPage=50");
   });
 
   it("drops the page — a different filter is a different list", () => {
     renderTabs("all", 20);
 
-    expect(hrefOf("To learn")).not.toContain("page=");
+    expect(hrefOf("New")).not.toContain("page=");
   });
 
-  it("sums both buckets for All", () => {
-    renderTabs("todo", 10, { todo: 3, learned: 4 });
+  it("offers a tab for every bucket, retired included", () => {
+    renderTabs("all");
 
-    expect(screen.getByText("All").parentElement).toHaveTextContent("7");
+    for (const label of ["New", "Learning", "Mature", "Retired", "All"]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
+  it("sums every bucket for All", () => {
+    renderTabs("new", 10, { new: 3, learning: 4, mature: 2, retired: 1 });
+
+    expect(screen.getByText("All").parentElement).toHaveTextContent("10");
   });
 
   it("puts no spinner in the strip — the badge already owns that corner", () => {
     setLinkPending(true);
-    const { container } = renderTabs("todo");
+    const { container } = renderTabs("new");
 
     expect(container.querySelectorAll(".animate-spin")).toHaveLength(0);
   });
@@ -71,8 +80,8 @@ describe("ListFilterTabs", () => {
     setLinkPending(true);
     render(
       <NavPendingProvider>
-        <ListSession counts={{ todo: 3, learned: 4 }}>
-          <ListFilterTabs filter="todo" perPage={10} />
+        <ListSession counts={{ new: 3, learning: 4, mature: 2, retired: 1 }}>
+          <ListFilterTabs filter="new" perPage={10} />
         </ListSession>
         <PendingContent>
           <p>rows</p>

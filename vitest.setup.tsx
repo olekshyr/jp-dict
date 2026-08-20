@@ -33,6 +33,14 @@ vi.mock("@/app/actions/words", () => ({
   addWord: vi.fn(async () => undefined),
   removeWord: vi.fn(async () => undefined),
   setStatus: vi.fn(async () => undefined),
+  // Returns the previews the real action returns, so a card sent to the back
+  // of the deck by "again" gets fresh labels rather than undefined.
+  gradeCard: vi.fn(async () => ({
+    again: "1d",
+    hard: "2d",
+    good: "3d",
+    easy: "8d",
+  })),
   setNote: vi.fn(async () => undefined),
   setFrontMode: vi.fn(async () => undefined),
 }));

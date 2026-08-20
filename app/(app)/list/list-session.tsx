@@ -2,23 +2,36 @@
 
 import { createContext, useContext, useMemo, useReducer } from "react";
 
-export type Counts = { todo: number; learned: number };
+import { LIST_FILTERS, type Counts } from "@/lib/srs/grades";
+
+export type { Counts };
 
 /**
  * A signed change to each bucket. Deltas rather than counts, for two reasons:
  * undoing one is negation, and the badges stay `serverCount + delta` so this
  * state never has to be reconciled against a changed prop — the class of bug
  * that made the review counter reset.
+ *
+ * Partial because a move only ever touches the two buckets it moves between,
+ * and naming the other two as zeroes is noise a caller can get wrong.
  */
-export type CountDelta = Counts;
+export type CountDelta = Partial<Counts>;
 
-const ZERO: CountDelta = { todo: 0, learned: 0 };
+const ZERO: Counts = { new: 0, learning: 0, mature: 0, retired: 0 };
 
-function reducer(total: CountDelta, next: CountDelta): CountDelta {
-  return {
-    todo: total.todo + next.todo,
-    learned: total.learned + next.learned,
-  };
+export function negate(delta: CountDelta): CountDelta {
+  const out: CountDelta = {};
+  for (const bucket of LIST_FILTERS) {
+    const value = delta[bucket];
+    if (value) out[bucket] = -value;
+  }
+  return out;
+}
+
+function reducer(total: Counts, next: CountDelta): Counts {
+  const out = { ...total };
+  for (const bucket of LIST_FILTERS) out[bucket] += next[bucket] ?? 0;
+  return out;
 }
 
 const CountsContext = createContext<Counts>(ZERO);
@@ -52,13 +65,7 @@ export function ListSession({
 }: Readonly<{ counts: Counts; children: React.ReactNode }>) {
   const [delta, dispatch] = useReducer(reducer, ZERO);
 
-  const value = useMemo(
-    () => ({
-      todo: counts.todo + delta.todo,
-      learned: counts.learned + delta.learned,
-    }),
-    [counts.todo, counts.learned, delta.todo, delta.learned],
-  );
+  const value = useMemo(() => reducer(counts, delta), [counts, delta]);
 
   return (
     <DispatchContext value={dispatch}>

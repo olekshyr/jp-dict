@@ -1,8 +1,8 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MotionConfig } from "motion/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { setFrontMode, setStatus } from "@/app/actions/words";
+import { gradeCard, setFrontMode } from "@/app/actions/words";
 import type { Card } from "@/lib/user-words/queries";
 import { toast } from "@/components/ui/toast";
 import { Flashcards } from "./flashcards";
@@ -26,16 +26,32 @@ const card = (entryId: number, headword: string): Card => ({
   romaji: `romaji-${entryId}`,
   glosses: `gloss-${entryId}`,
   ruby: [{ ruby: headword, rt: "よみ" }],
+  previews: { again: "1d", hard: "2d", good: "3d", easy: "8d" },
 });
 
 const deck = [card(1, "一"), card(2, "二"), card(3, "三")];
 
-const flip = () =>
-  fireEvent.click(screen.getByRole("button", { name: /Reveal answer|Show front/ }));
+/** Clicks the card itself, which is a flip toggle in both directions. */
+const flipCard = () =>
+  fireEvent.click(
+    screen.getByRole("button", { name: /Flip to the answer|Flip back to the front/ }),
+  );
 
-const press = async (name: string) => {
+/** The button under the card, which only reveals. */
+const flip = () => fireEvent.click(screen.getByRole("button", { name: "Reveal answer" }));
+
+/*
+ * Grade buttons carry their interval inside the accessible name ("Good 3d"),
+ * so these match on the leading label rather than the whole string.
+ */
+const button = (label: string) =>
+  screen.getByRole("button", { name: new RegExp(`^${label}`) });
+
+/** Flips the card, then answers it — a grade is unreachable before the flip. */
+const grade = async (label: string) => {
+  flip();
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name }));
+    fireEvent.click(button(label));
   });
 };
 
@@ -83,14 +99,25 @@ describe("Flashcards", () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
       expect(
-        screen.getByRole("button", { name: "Reveal answer" }),
+        screen.getByRole("button", { name: "Flip to the answer" }),
       ).toBeInTheDocument();
       flip();
 
       expect(screen.getByText("gloss-1")).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Show front" }),
+        screen.getByRole("button", { name: "Flip back to the front" }),
       ).toBeInTheDocument();
+    });
+
+    it("flips from the card itself as well as the button", () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      flipCard();
+      expect(screen.getByText("gloss-1")).toBeInTheDocument();
+
+      // The card toggles back; the button below it only ever reveals.
+      flipCard();
+      expect(screen.queryByText("gloss-1")).not.toBeInTheDocument();
     });
 
     it("shows the headword on the back in english mode, since the front had the gloss", () => {
@@ -101,53 +128,62 @@ describe("Flashcards", () => {
     });
   });
 
-  describe("skipping", () => {
-    it("advances without touching the deck", async () => {
+  describe("grading", () => {
+    /*
+     * Rating a word you have not tried to recall is not a review — FSRS reads
+     * the answer as evidence about memory, so an accidental click on an
+     * unflipped card would poison the schedule rather than just skip a beat.
+     */
+    it("offers the reveal instead of the grades until the card is flipped", () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      await press("Skip");
-      await waitFor(() => expect(screen.getByText("二")).toBeInTheDocument());
-      expect(screen.getByText(/3 left/)).toBeInTheDocument();
-      expect(setStatus).not.toHaveBeenCalled();
-    });
-
-    it("wraps back to the first card past the end", async () => {
-      renderFlashcards({ cards: deck, initialMode: "kanji" });
-
-      await press("Skip");
-      await press("Skip");
-      await press("Skip");
-
-      // Under `mode="wait"`, the wrapped-to card doesn't mount until the
-      // outgoing one's exit settles — a synchronous assertion here could pass
-      // on a stale, not-yet-transitioned DOM without the wraparound arithmetic
-      // actually being exercised. Same pattern as the sibling "wraps to the
-      // start" test below.
-      expect(await screen.findByText("一")).toBeInTheDocument();
-    });
-
-    it("hides the answer again after advancing", async () => {
-      renderFlashcards({ cards: deck, initialMode: "kanji" });
+      // Not merely disabled: a row of dead buttons is the thing this replaced.
+      for (const label of ["Again", "Hard", "Good", "Easy"]) {
+        expect(
+          screen.queryByRole("button", { name: new RegExp(`^${label}`) }),
+        ).not.toBeInTheDocument();
+      }
+      expect(
+        screen.getByRole("button", { name: "Reveal answer" }),
+      ).toBeInTheDocument();
 
       flip();
-      await press("Skip");
 
-      // Under `mode="wait"` the incoming card mounts only once the outgoing
-      // one's exit settles, so the label has to be awaited rather than read.
+      for (const label of ["Again", "Hard", "Good", "Easy"]) {
+        expect(button(label)).toBeEnabled();
+      }
       expect(
-        await screen.findByRole("button", { name: "Reveal answer" }),
-      ).toBeInTheDocument();
+        screen.queryByRole("button", { name: "Reveal answer" }),
+      ).not.toBeInTheDocument();
     });
-  });
 
-  describe('"I know this"', () => {
-    it("marks the card learned and drops it from the session", async () => {
+    it("shows what each grade would schedule, once the answer is up", () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      await press("I know this");
+      expect(screen.queryByText("3d")).not.toBeInTheDocument();
+      flip();
 
-      expect(setStatus).toHaveBeenCalledExactlyOnceWith(1, "learned");
+      expect(button("Again")).toHaveTextContent("1d");
+      expect(button("Hard")).toHaveTextContent("2d");
+      expect(button("Good")).toHaveTextContent("3d");
+      expect(button("Easy")).toHaveTextContent("8d");
+    });
+
+    it("records the answer and drops the card from the session", async () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      await grade("Good");
+
+      expect(gradeCard).toHaveBeenCalledExactlyOnceWith(1, "good");
       expect(screen.getByText(/2 left/)).toBeInTheDocument();
+    });
+
+    it("passes the grade the button stands for", async () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      await grade("Easy");
+
+      expect(gradeCard).toHaveBeenCalledExactlyOnceWith(1, "easy");
     });
 
     // The whole point of the optimistic layer. Scheduling these updates inside
@@ -155,54 +191,54 @@ describe("Flashcards", () => {
     // React withholds them until it settles — the card then sits on screen for
     // the entire write round-trip, which is what this guards against.
     it("drops the card on click, without waiting for the write", async () => {
-      let settle!: () => void;
-      vi.mocked(setStatus).mockReturnValueOnce(
-        new Promise<void>((resolve) => {
+      let settle!: (value: null) => void;
+      vi.mocked(gradeCard).mockReturnValueOnce(
+        new Promise((resolve) => {
           settle = resolve;
         }),
       );
 
       renderFlashcards({ cards: deck, initialMode: "kanji" });
+      flip();
       await act(async () => {
-        fireEvent.click(screen.getByRole("button", { name: "I know this" }));
+        fireEvent.click(button("Good"));
       });
 
       expect(screen.getByText(/2 left/)).toBeInTheDocument();
-      await act(async () => settle());
+      await act(async () => settle(null));
     });
 
-    it("holds the index so the next card slides into place", async () => {
+    it("brings the next card up in its place", async () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      // Removing card 1 shifts card 2 into index 0 — advancing as well would
-      // skip straight past it. The next card is a key change for
-      // AnimatePresence, so its enter animation settles asynchronously.
-      await press("I know this");
+      await grade("Good");
+
       expect(await screen.findByText("二")).toBeInTheDocument();
     });
 
-    it("wraps to the start when the card removed was the last one", async () => {
+    it("hides the answer again for the next card", async () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      await press("Skip");
-      await press("Skip");
-      expect(await screen.findByText("三")).toBeInTheDocument();
+      await grade("Good");
 
-      await press("I know this");
-      expect(await screen.findByText("一")).toBeInTheDocument();
-      expect(screen.getByText(/2 left/)).toBeInTheDocument();
+      expect(
+        await screen.findByRole("button", { name: "Reveal answer" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /^Good/ }),
+      ).not.toBeInTheDocument();
     });
 
     it("ignores a refilled deck handed back by the server", async () => {
       const { rerender } = renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      await press("I know this");
+      await grade("Good");
       expect(screen.getByText(/2 left/)).toBeInTheDocument();
       expect(await screen.findByText("二")).toBeInTheDocument();
 
-      // getReviewCards refills to its limit and re-randomises on every call, so
-      // a re-render can hand back a different deck of the same size. The
-      // session must ignore it — otherwise the count silently resets.
+      // getReviewCards selects afresh on every call, so a re-render can hand
+      // back a deck that still contains words this session already answered.
+      // Adopting it would silently reset the count.
       rerender(
         <MotionConfig transition={{ duration: 0 }}>
           <Flashcards
@@ -216,23 +252,23 @@ describe("Flashcards", () => {
       expect(screen.getByText("二")).toBeInTheDocument();
     });
 
-    it("ends the session once the last card is learned", async () => {
+    it("ends the session once the last card is answered", async () => {
       renderFlashcards({ cards: [card(1, "一")], initialMode: "kanji" });
 
-      await press("I know this");
+      await grade("Good");
 
       expect(screen.getByText("Session complete")).toBeInTheDocument();
     });
 
     it("puts the card back and warns when the write fails", async () => {
-      vi.mocked(setStatus).mockRejectedValueOnce(new Error("offline"));
+      vi.mocked(gradeCard).mockRejectedValueOnce(new Error("offline"));
       const add = vi.spyOn(toast, "add").mockReturnValue("toast-id");
 
       renderFlashcards({ cards: deck, initialMode: "kanji" });
-      await press("I know this");
+      await grade("Good");
 
-      // A silently dropped card is a word the user believes they have learned
-      // and the database does not.
+      // A silently dropped card is a word the user believes they answered and
+      // the database has never heard of.
       expect(screen.getByText(/3 left/)).toBeInTheDocument();
       expect(screen.getByText("一")).toBeInTheDocument();
       expect(add).toHaveBeenCalledWith(
@@ -240,23 +276,68 @@ describe("Flashcards", () => {
       );
     });
 
-    it("restores the index when rolling back the last card", async () => {
-      vi.mocked(setStatus).mockRejectedValueOnce(new Error("offline"));
+    it("puts a rolled-back card at the head, not wherever it was", async () => {
+      vi.mocked(gradeCard).mockRejectedValueOnce(new Error("offline"));
       vi.spyOn(toast, "add").mockReturnValue("toast-id");
 
       renderFlashcards({ cards: deck, initialMode: "kanji" });
-      // Skip twice to land on the last card (三).
-      await press("Skip");
-      await press("Skip");
-      expect(await screen.findByText("三")).toBeInTheDocument();
+      // "again" sends the card to the back; the rollback has to bring it all
+      // the way forward again, or the failure is invisible until the deck
+      // wraps round.
+      await grade("Again");
 
-      await press("I know this");
-
-      // When the write fails, the card returns to index 2, not wrapping to index 0.
-      // Losing setIndex(at) from the rollback path makes this fail, keeping the
-      // index at 0 and showing 一 instead.
       expect(screen.getByText(/3 left/)).toBeInTheDocument();
-      expect(await screen.findByText("三")).toBeInTheDocument();
+      expect(await screen.findByText("一")).toBeInTheDocument();
+    });
+  });
+
+  describe("again", () => {
+    it("sends the card to the back instead of dropping it", async () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      await grade("Again");
+
+      expect(gradeCard).toHaveBeenCalledExactlyOnceWith(1, "again");
+      expect(await screen.findByText("二")).toBeInTheDocument();
+    });
+
+    it("does not move the counter — the word is still not known", async () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      await grade("Again");
+
+      expect(screen.getByText(/3 left/)).toBeInTheDocument();
+    });
+
+    it("comes back round after the rest of the deck", async () => {
+      renderFlashcards({
+        cards: [card(1, "一"), card(2, "二")],
+        initialMode: "kanji",
+      });
+
+      await grade("Again");
+      expect(await screen.findByText("二")).toBeInTheDocument();
+
+      await grade("Good");
+      expect(await screen.findByText("一")).toBeInTheDocument();
+      expect(screen.getByText(/1 left/)).toBeInTheDocument();
+    });
+
+    it("takes fresh intervals from the write, since the card is coming back", async () => {
+      vi.mocked(gradeCard).mockResolvedValueOnce({
+        again: "1d",
+        hard: "4d",
+        good: "6d",
+        easy: "12d",
+      });
+
+      renderFlashcards({ cards: [card(1, "一")], initialMode: "kanji" });
+      await grade("Again");
+
+      // The same card is up again; its buttons must describe the schedule it
+      // just moved to, not the one it had when the deck was built.
+      flip();
+      expect(button("Good")).toHaveTextContent("6d");
     });
   });
 

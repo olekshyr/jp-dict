@@ -2,7 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { SparklesIcon } from "lucide-react";
 
-import { getFrontMode, getReviewCards } from "@/lib/user-words/queries";
+import { formatDueIn } from "@/lib/srs/grades";
+import {
+  getFrontMode,
+  getNextDueAt,
+  getReviewCards,
+} from "@/lib/user-words/queries";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -20,10 +25,16 @@ function ReviewSkeleton() {
 }
 
 async function Session() {
-  // Both are per-user and uncached; run them together rather than in series.
-  const [cards, frontMode] = await Promise.all([
-    getReviewCards(20),
+  /*
+   * All three are per-user and uncached, so they run together. The due-date
+   * lookup only matters when the session comes back empty, but it is a single
+   * indexed row on the index the session query already uses — cheaper here
+   * than a second round-trip on the branch that needs it.
+   */
+  const [cards, frontMode, nextDue] = await Promise.all([
+    getReviewCards(),
     getFrontMode(),
+    getNextDueAt(),
   ]);
 
   if (cards.length === 0) {
@@ -33,18 +44,22 @@ async function Session() {
           <EmptyMedia variant="icon">
             <SparklesIcon />
           </EmptyMedia>
-          <EmptyTitle>Nothing left to review</EmptyTitle>
+          <EmptyTitle>
+            {nextDue ? "All caught up" : "Nothing to review yet"}
+          </EmptyTitle>
           <EmptyDescription>
-            Every saved word is marked learned.
+            {nextDue
+              ? `The next word is due ${formatDueIn(nextDue, new Date())}.`
+              : "Save a word and it shows up here straight away."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           <Button
             variant="outline"
             nativeButton={false}
-            render={<Link href="/search" />}
+            render={<Link href={nextDue ? "/list" : "/search"} />}
           >
-            Find more words
+            {nextDue ? "Back to my list" : "Find words"}
           </Button>
         </EmptyContent>
       </Empty>

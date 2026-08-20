@@ -1,0 +1,1 @@
+ALTER TABLE "user_words" DROP COLUMN "ease";

@@ -11,7 +11,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # jp-dict
 
 A Japanese dictionary and vocabulary trainer. Search JMdict by kanji, kana or
-romaji; save entries to a personal list; drill the list as flashcards.
+romaji; save entries to a personal list; drill the list as flashcards on an
+FSRS spaced-repetition schedule.
 
 Next.js 16 (App Router) · React 19 · Neon Postgres via Drizzle · Clerk auth ·
 Tailwind v4 + shadcn (Base UI) · deployed on Vercel · pnpm.
@@ -48,9 +49,10 @@ lib/
   db/                  schema.ts + client.ts — the only place DATABASE_URL is read
   dictionary/          search, entry lookup, script detection, JMdict tag names
   user-words/          per-user reads/writes; each function calls auth() itself
+  srs/                 grades.ts (client-safe vocabulary) + scheduler.ts (FSRS)
   pagination.ts        pure URL-state helpers, shared server + client
 scripts/               JMdict importer and verification, run locally only
-drizzle/               generated SQL migrations — never hand-edit
+drizzle/               generated SQL migrations — hand-edited only for a backfill
 docs/                  design specs and runbooks
 ```
 
@@ -133,7 +135,22 @@ threat model: `docs/superpowers/specs/2026-08-03-auth-guard-dictionary-queries-d
   `simple` tsvector (no stemming) because dictionary lookup is a lookup, not a
   relevance ranking.
 - Migrations are generated, reviewed and applied **manually before merge** —
-  never inside a build. Never run `drizzle-kit push`.
+  never inside a build. Never run `drizzle-kit push`. A data backfill is the one
+  thing hand-written into a generated file, and it belongs in the same migration
+  as the DDL it supports; `0004` is the example.
+- **Scheduling is FSRS**, via `ts-fsrs`, and the five SM-2-shaped columns the
+  MVP reserved were re-purposed rather than used as designed — `ease` is gone,
+  `stability`/`difficulty`/`state`/`learning_steps`/`last_review_at` are new.
+  `review_log` is append-only and exists so parameters can one day be fitted to
+  a user's own history; nothing writes to it but `gradeCard`, and nothing reads
+  it yet. Design and rationale:
+  `docs/superpowers/specs/2026-08-20-fsrs-scheduling-design.md`.
+- **`status` is a retire flag, not a lifecycle.** A word never "becomes
+  learned" under FSRS — it earns longer intervals. `/list`'s New / Learning /
+  Mature buckets are derived from `state` and `interval_days`, in two places
+  that must agree: `bucketOf` in `lib/srs/scheduler.ts` and the `CASE` in
+  `lib/user-words/queries.ts`. The duplication is deliberate — filtering and
+  counting have to happen in SQL — and `MATURE_DAYS` is the only threshold.
 - The app uses the neon-http driver (one HTTP request per statement); the
   importer uses a plain `pg` TCP connection and a direct (unpooled) URL.
 - `data/` (60 MB `JMdict_e.xml`, 33 MB `JmdictFurigana.json`) is gitignored and
@@ -249,12 +266,33 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   that would block navigation. `/search` and `/list` both export it; a route
   reading search params needs the `runtime` form with every param present in
   every sample and `null` where absent.
-- **`refresh()` re-runs uncached queries, so it does not "refresh" a
-  randomly-ordered one — it redraws it.** `getReviewCards` is
-  `ORDER BY random() LIMIT 20`, so a refresh mid-session returned a different
-  twenty and reset the "N left" counter. Client state seeded from a prop like
-  that must own the value and ignore later props; see
+- **`refresh()` re-runs uncached queries, so a review session must own its
+  deck.** This began as a random-order problem — `getReviewCards` was
+  `ORDER BY random() LIMIT 20`, so a refresh handed back a different twenty and
+  reset the "N left" counter. Selection is deterministic now, and the hazard is
+  no smaller: a refresh re-selects everything still due, which is every card
+  already answered this session whose new due date has not passed. Client state
+  seeded from a prop like that must own the value and ignore later props; see
   `app/(app)/review/flashcards.tsx`.
+- **`enable_short_term: false` and `interval_days integer` are one decision,
+  not two.** With short-term steps on, FSRS answers a failed card in minutes;
+  that rounds to a 0-day interval and a `due_at` in the past, and the card is
+  then permanently due. The same-session retry is bought back in the client
+  instead — "Again" sends the card to the back of the deck. Turning the flag on
+  means giving `interval_days` sub-day resolution first.
+- **`due_at` is NOT NULL in practice for every row, and the review query
+  depends on it.** Migration `0004` backfills it from `added_at` and `addWord`
+  always sets it, so the session predicate is a clean `due_at <= now()` range
+  scan on `user_words_due_idx`. Reintroducing a NULL means the predicate needs
+  `OR due_at IS NULL`, which forces a BitmapOr and gives up the index-served
+  ordering. The column stays nullable in DDL only because tightening it would
+  be a separate deploy.
+- **`lib/srs/grades.ts` must never import `ts-fsrs`.** It is the half of the
+  scheduling module that client components are allowed to touch — grade labels,
+  bucket names, interval formatting. Everything that actually schedules lives
+  in `lib/srs/scheduler.ts` and stays server-side, which is why grade buttons
+  get their intervals as strings on the `Card` DTO and from `gradeCard`'s
+  return value rather than computing them.
 - **`blur` does not fire when React unmounts a focused element.** A save-on-blur
   control therefore loses the edit whenever its container closes — collapsing a
   `/list` note, navigating away mid-edit. `NoteEditor` commits from an effect

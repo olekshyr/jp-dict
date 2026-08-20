@@ -6,11 +6,11 @@ import { NavPendingProvider } from "../nav-pending";
 import { ListFilterTabs } from "./list-filter-tabs";
 import { ListSession, useListDispatch } from "./list-session";
 
-/** Dispatches a "moved one word from todo to learned" delta on click. */
+/** Dispatches a "retired one new word" delta on click. */
 function MoveOne() {
   const dispatch = useListDispatch();
   return (
-    <button type="button" onClick={() => dispatch({ todo: -1, learned: 1 })}>
+    <button type="button" onClick={() => dispatch({ new: -1, retired: 1 })}>
       move
     </button>
   );
@@ -34,9 +34,9 @@ function DispatchProbe({ onRender }: { onRender: () => void }) {
 describe("ListSession", () => {
   it("renders server counts plus this session's deltas", () => {
     render(
-      <ListSession counts={{ todo: 3, learned: 1 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 1 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="todo" perPage={20} />
+          <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
         <MoveOne />
       </ListSession>,
@@ -44,21 +44,21 @@ describe("ListSession", () => {
 
     // Base UI's Button keeps role="button" on anchors, so the tabs are queried
     // by text rather than by the link role.
-    expect(screen.getByText("To learn").textContent).toContain("3");
+    expect(screen.getByText("New").textContent).toContain("3");
 
     fireEvent.click(screen.getByRole("button", { name: "move" }));
 
-    expect(screen.getByText("To learn").textContent).toContain("2");
-    expect(screen.getByText("Learned").textContent).toContain("2");
+    expect(screen.getByText("New").textContent).toContain("2");
+    expect(screen.getByText("Retired").textContent).toContain("2");
   });
 
   it("does not re-render dispatch-only consumers when the counts change", () => {
     const onRender = vi.fn();
 
     render(
-      <ListSession counts={{ todo: 3, learned: 1 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 1 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="todo" perPage={20} />
+          <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
         <DispatchProbe onRender={onRender} />
         <MoveOne />
@@ -75,17 +75,17 @@ describe("ListSession", () => {
 
   it("drops pending deltas when the key changes", () => {
     const session = (key: string) => (
-      <ListSession key={key} counts={{ todo: 3, learned: 1 }}>
+      <ListSession key={key} counts={{ new: 3, learning: 0, mature: 0, retired: 1 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="todo" perPage={20} />
+          <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
         <MoveOne />
       </ListSession>
     );
 
-    const { rerender } = render(session("todo:1:20"));
+    const { rerender } = render(session("new:1:20"));
     fireEvent.click(screen.getByRole("button", { name: "move" }));
-    expect(screen.getByText("To learn").textContent).toContain("2");
+    expect(screen.getByText("New").textContent).toContain("2");
 
     // This test keys `<ListSession>` itself, so what it actually pins is
     // React's key semantics — a changed key remounts and drops the reducer's
@@ -93,8 +93,8 @@ describe("ListSession", () => {
     // `counts`. That wiring lives in app/(app)/list/page.tsx, an async Server
     // Component out of scope for Vitest per AGENTS.md; deleting `key={...}`
     // there would leave this test green.
-    rerender(session("todo:2:20"));
+    rerender(session("new:2:20"));
 
-    expect(screen.getByText("To learn").textContent).toContain("3");
+    expect(screen.getByText("New").textContent).toContain("3");
   });
 });

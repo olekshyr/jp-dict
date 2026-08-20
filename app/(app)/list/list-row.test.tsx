@@ -112,14 +112,21 @@ function runCountOf(onRun: RenderSpy, id: string) {
   return onRun.mock.calls.filter(([ranId]) => ranId === id).length;
 }
 
-function list(onRender: RenderSpy, onRun: RenderSpy, filter: "todo" | "all" = "todo") {
+function list(onRender: RenderSpy, onRun: RenderSpy, filter: "new" | "all" = "new") {
   return (
-    <ListSession counts={{ todo: 3, learned: 0 }}>
+    <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 0 }}>
       <NavPendingProvider>
         <ListFilterTabs filter={filter} perPage={20} />
       </NavPendingProvider>
       {["a", "b", "c"].map((id) => (
-        <CountedRow key={id} id={id} onRun={onRun} filter={filter} status="todo">
+        <CountedRow
+          key={id}
+          id={id}
+          onRun={onRun}
+          filter={filter}
+          status="todo"
+          bucket="new"
+        >
           <RenderCount onRender={onRender} id={id} />
           <RowControls label={id} />
         </CountedRow>
@@ -138,7 +145,7 @@ describe("ListRow", () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText("row b"));
     expect(screen.getByText("row a")).toBeInTheDocument();
-    expect(screen.getByText("To learn").textContent).toContain("2");
+    expect(screen.getByText("New").textContent).toContain("2");
   });
 
   it("does not re-render the other rows", () => {
@@ -170,17 +177,17 @@ describe("ListRow", () => {
     fireEvent.click(screen.getByRole("button", { name: "learn a" }));
 
     expect(screen.getByText("row a")).toBeInTheDocument();
-    expect(screen.getByText("To learn").textContent).toContain("2");
-    expect(screen.getByText("Learned").textContent).toContain("1");
+    expect(screen.getByText("New").textContent).toContain("2");
+    expect(screen.getByText("Retired").textContent).toContain("1");
   });
 
   it("removes a row that leaves the learned filter", async () => {
     render(
-      <ListSession counts={{ todo: 0, learned: 2 }}>
+      <ListSession counts={{ new: 0, learning: 0, mature: 0, retired: 2 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="learned" perPage={20} />
+          <ListFilterTabs filter="retired" perPage={20} />
         </NavPendingProvider>
-        <ListRow filter="learned" status="learned">
+        <ListRow filter="retired" status="learned" bucket="new">
           <span>row d</span>
           <RowControlsTo label="d" to="todo" />
         </ListRow>
@@ -190,8 +197,8 @@ describe("ListRow", () => {
     fireEvent.click(screen.getByRole("button", { name: "move d" }));
 
     await waitForElementToBeRemoved(() => screen.queryByText("row d"));
-    expect(screen.getByText("Learned").textContent).toContain("1");
-    expect(screen.getByText("To learn").textContent).toContain("1");
+    expect(screen.getByText("Retired").textContent).toContain("1");
+    expect(screen.getByText("New").textContent).toContain("1");
   });
 
   it("restores the row and the counts on rollback", () => {
@@ -202,8 +209,8 @@ describe("ListRow", () => {
     fireEvent.click(screen.getByRole("button", { name: "learn a" }));
     fireEvent.click(screen.getByRole("button", { name: "undo a" }));
 
-    expect(screen.getByText("To learn").textContent).toContain("3");
-    expect(screen.getByText("Learned").textContent).toContain("0");
+    expect(screen.getByText("New").textContent).toContain("3");
+    expect(screen.getByText("Retired").textContent).toContain("0");
   });
 
   /*
@@ -251,11 +258,11 @@ describe("ListRow", () => {
   it("restores a removed row and its counts when the status write fails", async () => {
     vi.mocked(setStatus).mockRejectedValueOnce(new Error("offline"));
     render(
-      <ListSession counts={{ todo: 3, learned: 0 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 0 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="todo" perPage={20} />
+          <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
-        <ListRow filter="todo" status="todo">
+        <ListRow filter="new" status="todo" bucket="new">
           <StatusButton entryId={1} status="todo" />
         </ListRow>
       </ListSession>,
@@ -265,7 +272,7 @@ describe("ListRow", () => {
     // immediately — the same optimistic removal `ListRow.setStatus` performs
     // on the real /list route.
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Mark learned" }));
+      fireEvent.click(screen.getByRole("button", { name: "Retire" }));
     });
 
     // 400ms comfortably clears the real ~150-220ms it takes a *genuinely*
@@ -275,24 +282,24 @@ describe("ListRow", () => {
     // that a passing run is guaranteed to hit.
     await expect(
       waitForElementToBeRemoved(
-        () => screen.queryByRole("button", { name: "Mark learned" }),
+        () => screen.queryByRole("button", { name: "Retire" }),
         { timeout: 400 },
       ),
     ).rejects.toThrow();
 
-    expect(screen.getByRole("button", { name: "Mark learned" })).toBeInTheDocument();
-    expect(screen.getByText("To learn").textContent).toContain("3");
-    expect(screen.getByText("Learned").textContent).toContain("0");
+    expect(screen.getByRole("button", { name: "Retire" })).toBeInTheDocument();
+    expect(screen.getByText("New").textContent).toContain("3");
+    expect(screen.getByText("Retired").textContent).toContain("0");
   });
 
   it("restores an unsaved row and its counts when the save write fails", async () => {
     vi.mocked(removeWord).mockRejectedValueOnce(new Error("offline"));
     render(
-      <ListSession counts={{ todo: 3, learned: 0 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 0 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="todo" perPage={20} />
+          <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
-        <ListRow filter="todo" status="todo">
+        <ListRow filter="new" status="todo" bucket="new">
           <SaveButton entryId={1} saved />
         </ListRow>
       </ListSession>,
@@ -310,7 +317,7 @@ describe("ListRow", () => {
     ).rejects.toThrow();
 
     expect(screen.getByRole("button", { name: "Saved" })).toBeInTheDocument();
-    expect(screen.getByText("To learn").textContent).toContain("3");
+    expect(screen.getByText("New").textContent).toContain("3");
   });
 
   /*
@@ -323,11 +330,11 @@ describe("ListRow", () => {
    */
   it("removes the row from the page when the status write succeeds", async () => {
     render(
-      <ListSession counts={{ todo: 3, learned: 0 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 0 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="todo" perPage={20} />
+          <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
-        <ListRow filter="todo" status="todo">
+        <ListRow filter="new" status="todo" bucket="new">
           <StatusButton entryId={1} status="todo" />
         </ListRow>
       </ListSession>,
@@ -339,26 +346,26 @@ describe("ListRow", () => {
     // present at the moment it starts watching, same as the sibling test
     // above ("removes only the unsaved row and ticks its bucket").
     //
-    // Queried by "Mark unlearned", not "Mark learned": the click relabels the
+    // Queried by "Put back", not "Retire": the click relabels the
     // button synchronously (`setCurrent(next)` in status-button.tsx, before
-    // the write even goes out), so "Mark learned" is already gone by the
+    // the write even goes out), so "Retire" is already gone by the
     // first check regardless of removal — that would assert the relabel, not
     // the wiring under test.
-    fireEvent.click(screen.getByRole("button", { name: "Mark learned" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retire" }));
 
     await waitForElementToBeRemoved(() =>
-      screen.queryByRole("button", { name: "Mark unlearned" }),
+      screen.queryByRole("button", { name: "Put back" }),
     );
-    expect(screen.getByText("To learn").textContent).toContain("2");
+    expect(screen.getByText("New").textContent).toContain("2");
   });
 
   it("removes the row from the page when the save write succeeds", async () => {
     render(
-      <ListSession counts={{ todo: 3, learned: 0 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 0 }}>
         <NavPendingProvider>
-          <ListFilterTabs filter="todo" perPage={20} />
+          <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
-        <ListRow filter="todo" status="todo">
+        <ListRow filter="new" status="todo" bucket="new">
           <SaveButton entryId={1} saved />
         </ListRow>
       </ListSession>,
@@ -372,7 +379,7 @@ describe("ListRow", () => {
     await waitForElementToBeRemoved(() =>
       screen.queryByRole("button", { name: "Save" }),
     );
-    expect(screen.getByText("To learn").textContent).toContain("2");
+    expect(screen.getByText("New").textContent).toContain("2");
   });
 
   /*
@@ -392,21 +399,21 @@ describe("ListRow", () => {
     );
 
     render(
-      <ListSession counts={{ todo: 3, learned: 0 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 0 }}>
         <NavPendingProvider>
           <ListFilterTabs filter="all" perPage={20} />
         </NavPendingProvider>
-        <ListRow filter="all" status="todo">
+        <ListRow filter="all" status="todo" bucket="new">
           <StatusButton entryId={1} status="todo" />
           <SaveButton entryId={1} saved />
         </ListRow>
       </ListSession>,
     );
 
-    // 1. Mark learned. Under `filter=all` the row stays put; `setStatus` is
+    // 1. Retire it. Under `filter=all` the row stays put; `setStatus` is
     // deliberately left unsettled, so it is still in flight below.
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Mark learned" }));
+      fireEvent.click(screen.getByRole("button", { name: "Retire" }));
     });
 
     // 2. Before it settles, unsave — the second write to this row, which
@@ -425,9 +432,9 @@ describe("ListRow", () => {
     // reappearing with a stale "learned" badge and a "Save" button
     // mid-removal.
     await waitForElementToBeRemoved(() =>
-      screen.queryByRole("button", { name: "Mark learned" }),
+      screen.queryByRole("button", { name: "Retire" }),
     );
-    expect(screen.getByText("To learn").textContent).toContain("2");
-    expect(screen.getByText("Learned").textContent).toContain("0");
+    expect(screen.getByText("New").textContent).toContain("2");
+    expect(screen.getByText("Retired").textContent).toContain("0");
   });
 });

@@ -4,7 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/lib/db/client";
-import { users, userWords } from "@/lib/db/schema";
+import { reviewLog, users, userWords } from "@/lib/db/schema";
+import { GRADES, type Previews } from "@/lib/srs/grades";
+import { schedule } from "@/lib/srs/scheduler";
 import { requireUserId } from "@/lib/user-words/auth";
 
 /*
@@ -31,6 +33,7 @@ const entryIdSchema = z.coerce
   .positive()
   .max(Number.MAX_SAFE_INTEGER);
 const statusSchema = z.enum(["todo", "learned"]);
+const gradeSchema = z.enum(GRADES);
 const frontModeSchema = z.enum(["kanji", "furigana", "romaji", "english"]);
 /*
  * The only free-form user text the app accepts. `z.string()` is doing real work
@@ -54,7 +57,10 @@ export async function addWord(rawEntryId: unknown) {
   // The unique index on (user_id, entry_id) makes a double-click a no-op.
   await db
     .insert(userWords)
-    .values({ userId, entryId })
+    // Due immediately: a word you just saved is a word you want to see. It also
+    // keeps `due_at` populated on every row, which is what lets the review
+    // query drop its `OR due_at IS NULL` branch.
+    .values({ userId, entryId, dueAt: new Date() })
     .onConflictDoNothing();
 }
 
@@ -67,6 +73,14 @@ export async function removeWord(rawEntryId: unknown) {
     .where(and(eq(userWords.userId, userId), eq(userWords.entryId, entryId)));
 }
 
+/**
+ * Retires a word from rotation, or puts it back.
+ *
+ * Deliberately touches nothing but `status`: the scheduling columns are left
+ * exactly as they were, so putting a word back resumes its existing schedule
+ * rather than restarting it from new. A word retired for a year comes back
+ * overdue, which is the honest answer.
+ */
 export async function setStatus(rawEntryId: unknown, rawStatus: unknown) {
   const userId = await requireUserId();
   const entryId = entryIdSchema.parse(rawEntryId);
@@ -81,6 +95,63 @@ export async function setStatus(rawEntryId: unknown, rawStatus: unknown) {
     // Scoped by userId as well as entryId: without it, any signed-in user could
     // mutate another user's row by guessing an entry id.
     .where(and(eq(userWords.userId, userId), eq(userWords.entryId, entryId)));
+}
+
+/**
+ * Records one flashcard answer and reschedules the word.
+ *
+ * Returns what each button would now schedule, so a card the user answered
+ * "again" can go straight to the back of the deck and pick up fresh labels when
+ * this settles — without shipping the scheduler to the browser.
+ *
+ * No optimistic-concurrency guard on the update, deliberately. A card leaves
+ * the deck the instant it is clicked, so the UI cannot grade the same state
+ * twice; and a guard would only skip the update while the log row still landed,
+ * splitting the two apart to prevent something that isn't reachable.
+ */
+export async function gradeCard(
+  rawEntryId: unknown,
+  rawGrade: unknown,
+): Promise<Previews | null> {
+  const userId = await requireUserId();
+  const entryId = entryIdSchema.parse(rawEntryId);
+  const grade = gradeSchema.parse(rawGrade);
+
+  const [row] = await db
+    .select({
+      dueAt: userWords.dueAt,
+      intervalDays: userWords.intervalDays,
+      repetitions: userWords.repetitions,
+      lapses: userWords.lapses,
+      stability: userWords.stability,
+      difficulty: userWords.difficulty,
+      state: userWords.state,
+      learningSteps: userWords.learningSteps,
+      lastReviewAt: userWords.lastReviewAt,
+    })
+    .from(userWords)
+    .where(and(eq(userWords.userId, userId), eq(userWords.entryId, entryId)))
+    .limit(1);
+
+  // Same silence as setNote and setStatus: an entry the user hasn't saved
+  // matches nothing and returns normally rather than answering whether it
+  // exists.
+  if (!row) return null;
+
+  const { next, log, previews } = schedule(row, grade, new Date());
+
+  // One request, one implicit transaction. The neon-http driver otherwise
+  // sends a statement per round-trip, and a card rescheduled without its log
+  // entry is history the optimizer can never recover.
+  await db.batch([
+    db
+      .update(userWords)
+      .set(next)
+      .where(and(eq(userWords.userId, userId), eq(userWords.entryId, entryId))),
+    db.insert(reviewLog).values({ userId, entryId, ...log }),
+  ]);
+
+  return previews;
 }
 
 /**

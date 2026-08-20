@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { useRow } from "./row-context";
 
-/** Moves a word between the todo and learned buckets. */
+/** Takes a word out of review rotation, or puts it back. */
 export function StatusButton({
   entryId,
   status,
@@ -45,7 +45,7 @@ export function StatusButton({
         });
       }}
     >
-      {current === "learned" ? "Mark unlearned" : "Mark learned"}
+      {current === "learned" ? "Put back" : "Retire"}
     </Button>
   );
 }

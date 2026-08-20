@@ -3,15 +3,18 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
+import type { Bucket, ListFilter } from "@/lib/srs/grades";
 import type { WordStatus } from "@/lib/user-words/queries";
 import { RowContext, type RowApi } from "../row-context";
-import { useListDispatch, type CountDelta } from "./list-session";
+import { negate, useListDispatch, type CountDelta } from "./list-session";
 
-const moveDelta = (to: WordStatus): CountDelta =>
-  to === "learned" ? { todo: -1, learned: 1 } : { todo: 1, learned: -1 };
-
-const dropDelta = (status: WordStatus): CountDelta =>
-  status === "learned" ? { todo: 0, learned: -1 } : { todo: -1, learned: 0 };
+/*
+ * Which tab a row shows under. Retiring never touches the schedule, so a word
+ * keeps its bucket the whole time it is retired and returns to it on the way
+ * back — which is what makes this a two-way toggle rather than a state machine.
+ */
+const shownIn = (status: WordStatus, bucket: Bucket): ListFilter =>
+  status === "learned" ? "retired" : bucket;
 
 /**
  * One row's optimistic state.
@@ -24,10 +27,12 @@ const dropDelta = (status: WordStatus): CountDelta =>
 export function ListRow({
   filter,
   status,
+  bucket,
   children,
 }: Readonly<{
-  filter: WordStatus | "all";
+  filter: ListFilter | "all";
   status: WordStatus;
+  bucket: Bucket;
   children: React.ReactNode;
 }>) {
   const dispatch = useListDispatch();
@@ -45,7 +50,9 @@ export function ListRow({
   const api = useMemo<RowApi>(
     () => ({
       setStatus(to) {
-        const delta = moveDelta(to);
+        const from = shownIn(current, bucket);
+        const into = shownIn(to, bucket);
+        const delta: CountDelta = { [from]: -1, [into]: 1 };
         const token = Symbol("setStatus");
         undo.current = { delta, status: current, token };
         dispatch(delta);
@@ -53,11 +60,11 @@ export function ListRow({
         // A row that no longer matches the active filter does not belong on
         // this page. Under `all` every bucket matches, so it stays put and only
         // its button label flips.
-        if (filter !== "all" && to !== filter) setRemoved(true);
+        if (filter !== "all" && into !== filter) setRemoved(true);
         return token;
       },
       unsave() {
-        const delta = dropDelta(current);
+        const delta: CountDelta = { [shownIn(current, bucket)]: -1 };
         const token = Symbol("unsave");
         undo.current = { delta, status: current, token };
         dispatch(delta);
@@ -67,13 +74,13 @@ export function ListRow({
       rollback(token) {
         const last = undo.current;
         if (!last || token === undefined || last.token !== token) return;
-        dispatch({ todo: -last.delta.todo, learned: -last.delta.learned });
+        dispatch(negate(last.delta));
         setCurrent(last.status);
         setRemoved(false);
         undo.current = null;
       },
     }),
-    [current, dispatch, filter],
+    [bucket, current, dispatch, filter],
   );
 
   return (

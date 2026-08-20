@@ -29,6 +29,20 @@
       "when": 1786260404163,
       "tag": "0003_bright_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787237870672,
+      "tag": "0004_lowly_whizzer",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787237878855,
+      "tag": "0005_late_bloodscream",
+      "breakpoints": true
     }
   ]
 }

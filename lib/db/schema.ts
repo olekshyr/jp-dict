@@ -254,11 +254,12 @@ export const userWords = pgTable(
     entryId: bigint("entry_id", { mode: "number" })
       .notNull()
       .references(() => entries.id, { onDelete: "cascade" }),
-    /** "todo" | "learned" */
+    /** "todo" = in rotation, "learned" = retired. */
     status: text("status").notNull().default("todo"),
     addedAt: timestamp("added_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /** When the word was retired from rotation; cleared when it goes back in. */
     learnedAt: timestamp("learned_at", { withTimezone: true }),
 
     /*
@@ -274,22 +275,88 @@ export const userWords = pgTable(
     note: text("note"),
 
     /*
-     * SRS scheduling, unused by the MVP. Present and nullable from day one so
-     * SM-2/FSRS can be layered on without a migration.
+     * FSRS scheduling state: the whole `ts-fsrs` Card, spread across columns
+     * rather than kept as jsonb so the due query stays an index scan.
+     *
+     * `dueAt` is nullable only because tightening it would be a separate
+     * deploy — in practice every row has one, set by `addWord` and backfilled
+     * from `addedAt` in migration 0004. The review query depends on that: if
+     * NULL were possible the predicate would need `OR due_at IS NULL`, which
+     * costs the index-served ordering. A word is due the moment it is saved.
+     *
+     * `intervalDays` is whole days, which is why the scheduler runs with
+     * `enable_short_term: false` — see lib/srs/scheduler.ts. FSRS's own
+     * `elapsed_days` is deprecated and derived from `lastReviewAt`.
      */
     dueAt: timestamp("due_at", { withTimezone: true }),
     intervalDays: integer("interval_days"),
-    ease: real("ease"),
     repetitions: integer("repetitions"),
     lapses: integer("lapses"),
+    stability: real("stability"),
+    difficulty: real("difficulty"),
+    /** ts-fsrs State: 0 New, 1 Learning, 2 Review, 3 Relearning. */
+    state: smallint("state").notNull().default(0),
+    learningSteps: smallint("learning_steps").notNull().default(0),
+    lastReviewAt: timestamp("last_review_at", { withTimezone: true }),
   },
   (t) => [
     // Makes "add to list" idempotent via onConflictDoNothing.
     uniqueIndex("user_words_user_entry_idx").on(t.userId, t.entryId),
     index("user_words_list_idx").on(t.userId, t.status, t.addedAt.desc()),
+    /*
+     * The review session. Default btree order (ASC, NULLS LAST) is exactly the
+     * order `getReviewCards` asks for, so this index serves the predicate and
+     * the ORDER BY together.
+     */
+    index("user_words_due_idx").on(t.userId, t.status, t.dueAt),
+  ],
+);
+
+/**
+ * One row per grade, append-only, never updated.
+ *
+ * Mirrors the `ts-fsrs` ReviewLog field for field so a scheduling result is
+ * stored verbatim and can be replayed. Everything below `rating` is the card's
+ * state *before* the review — the state after it is on `user_words` — because
+ * that is the direction an optimizer reads it: given what the card looked like
+ * and how the answer went, what should the parameters have been.
+ *
+ * `user_id` is not a foreign key, for the same reason `user_words.user_id`
+ * isn't one.
+ */
+export const reviewLog = pgTable(
+  "review_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    entryId: bigint("entry_id", { mode: "number" })
+      .notNull()
+      .references(() => entries.id, { onDelete: "cascade" }),
+    /** ts-fsrs Rating: 1 Again, 2 Hard, 3 Good, 4 Easy. */
+    rating: smallint("rating").notNull(),
+    state: smallint("state").notNull(),
+    /*
+     * ts-fsrs calls this field `due` on its ReviewLog, but it stores
+     * `last_review || due` — the moment of the *previous* review, falling back
+     * to the due date only when there wasn't one. Named for what it holds; a
+     * rollback that wants a ts-fsrs ReviewLog back reads it into `due`.
+     */
+    prevReviewAt: timestamp("prev_review_at", { withTimezone: true }),
+    stability: real("stability"),
+    difficulty: real("difficulty"),
+    scheduledDays: integer("scheduled_days"),
+    learningSteps: smallint("learning_steps"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("review_log_user_time_idx").on(t.userId, t.reviewedAt.desc()),
+    index("review_log_card_idx").on(t.userId, t.entryId, t.reviewedAt),
   ],
 );
 
 export type Entry = typeof entries.$inferSelect;
 export type UserWord = typeof userWords.$inferSelect;
+export type ReviewLogRow = typeof reviewLog.$inferSelect;
 export type EntrySearchRow = typeof entrySearch.$inferSelect;

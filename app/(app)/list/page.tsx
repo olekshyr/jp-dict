@@ -2,11 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { BookmarkIcon } from "lucide-react";
 
-import {
-  getMyWordCounts,
-  getMyWords,
-  type WordStatus,
-} from "@/lib/user-words/queries";
+import { getMyWordCounts, getMyWords } from "@/lib/user-words/queries";
+import { isListFilter, LIST_FILTERS, type ListFilter } from "@/lib/srs/grades";
 import { pageCount, parsePagination } from "@/lib/pagination";
 import {
   Empty,
@@ -43,13 +40,18 @@ export const unstable_instant = {
   prefetch: "runtime",
   samples: [
     { searchParams: { filter: null, page: null, perPage: null } },
-    { searchParams: { filter: "learned", page: null, perPage: null } },
+    { searchParams: { filter: "mature", page: null, perPage: null } },
     { searchParams: { filter: "all", page: "2", perPage: "50" } },
   ],
 };
 
-function parseFilter(raw?: string): WordStatus | "all" {
-  return raw === "learned" || raw === "all" ? raw : "todo";
+/*
+ * "all" is the default now that every bucket is a real place a word can be —
+ * under the old todo/learned split, landing on "learned" would have shown a
+ * graveyard.
+ */
+function parseFilter(raw?: string): ListFilter | "all" {
+  return raw && isListFilter(raw) ? raw : "all";
 }
 
 function ListSkeleton() {
@@ -69,11 +71,10 @@ async function WordList({
 }>) {
   const { filter: rawFilter, ...rest } = await searchParams;
   const filter = parseFilter(rawFilter);
-  const status = filter === "all" ? undefined : filter;
   const { page: requestedPage, perPage, offset } = parsePagination(rest);
 
   const [requestedWords, counts] = await Promise.all([
-    getMyWords(status, perPage, offset),
+    getMyWords(filter, perPage, offset),
     getMyWordCounts(),
   ]);
 
@@ -83,12 +84,15 @@ async function WordList({
    * final page and re-fetch — the counts are already here, and the extra query
    * only runs in that one case rather than on every load.
    */
-  const total = filter === "all" ? counts.todo + counts.learned : counts[filter];
+  const total =
+    filter === "all"
+      ? LIST_FILTERS.reduce((sum, key) => sum + counts[key], 0)
+      : counts[filter];
   const page = Math.min(requestedPage, pageCount(total, perPage));
   const words =
     page === requestedPage
       ? requestedWords
-      : await getMyWords(status, perPage, (page - 1) * perPage);
+      : await getMyWords(filter, perPage, (page - 1) * perPage);
 
   return (
     // Keyed on the query that produced `counts`, so navigating to another
@@ -115,7 +119,12 @@ async function WordList({
         <PendingContent>
           <ItemGroup>
             {words.map((word) => (
-              <ListRow key={word.entryId} filter={filter} status={word.status}>
+              <ListRow
+                key={word.entryId}
+                filter={filter}
+                status={word.status}
+                bucket={word.bucket}
+              >
                 <WordItem
                   entryId={word.entryId}
                   headword={word.headword}

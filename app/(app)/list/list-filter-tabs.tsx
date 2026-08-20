@@ -5,14 +5,13 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { paginationHref } from "@/lib/pagination";
-import type { WordStatus } from "@/lib/user-words/queries";
+import { FILTER_LABELS, LIST_FILTERS, type ListFilter } from "@/lib/srs/grades";
 import { LinkPending } from "../link-pending";
 import { useListCounts } from "./list-session";
 
-const FILTERS: Array<{ value: WordStatus | "all"; label: string }> = [
-  { value: "todo", label: "To learn" },
-  { value: "learned", label: "Learned" },
-  { value: "all", label: "All" },
+const FILTERS: Array<{ value: ListFilter | "all"; label: string }> = [
+  ...LIST_FILTERS.map((value) => ({ value, label: FILTER_LABELS[value] })),
+  { value: "all" as const, label: "All" },
 ];
 
 /**
@@ -24,17 +23,15 @@ const FILTERS: Array<{ value: WordStatus | "all"; label: string }> = [
 export function ListFilterTabs({
   filter,
   perPage,
-}: Readonly<{ filter: WordStatus | "all"; perPage: number }>) {
+}: Readonly<{ filter: ListFilter | "all"; perPage: number }>) {
   const counts = useListCounts();
+  const total = LIST_FILTERS.reduce((sum, key) => sum + counts[key], 0);
 
   return (
     <Tabs value={filter} className="mb-6">
       <TabsList>
         {FILTERS.map((f) => {
-          const count =
-            f.value === "all"
-              ? counts.todo + counts.learned
-              : counts[f.value as WordStatus];
+          const count = f.value === "all" ? total : counts[f.value];
           const isActive = filter === f.value;
           return (
             <TabsTrigger
