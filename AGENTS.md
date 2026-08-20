@@ -111,9 +111,12 @@ threat model: `docs/superpowers/specs/2026-08-03-auth-guard-dictionary-queries-d
   keyed on the URL state that produced it and reset by navigation, not a
   second source of truth for it. See
   `docs/superpowers/specs/2026-08-04-optimistic-writes-design.md`.
-- **Comments explain *why*, not *what*.** This codebase's comments carry the
-  reasoning behind non-obvious choices (index shapes, missing foreign keys,
-  provider placement). Match that density and register; don't narrate code.
+- **Write few comments.** The dense commentary in older files is being removed
+  as those files are touched — do not match it, restore it, or treat a missing
+  comment as an accident. Prefer names and structure that need no explanation;
+  add a short line only where a choice is genuinely surprising and would
+  otherwise be undone. Never narrate what the code does. Long-form reasoning
+  belongs in this file or in `docs/`, not inline.
 - **`use cache` requires care under `cacheComponents: true`.** Anything reading
   request data (auth, cookies, `searchParams`) pulls its subtree out of the
   static shell — isolate it in its own component behind `<Suspense>` rather than

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
+import { SaveIcon, SaveCheck } from "lucide-react";
 
 import { addWord, removeWord } from "@/app/actions/words";
 import { Button } from "@/components/ui/button";
@@ -17,15 +18,38 @@ export function SaveButton({
   saved: boolean;
   size?: React.ComponentProps<typeof Button>["size"];
 }>) {
-  // `saved` seeds this and nothing re-seeds it: the action no longer refreshes
-  // the route, so the button is the authority on its own label until the next
-  // navigation re-renders it from the database.
   const [isSaved, setIsSaved] = useState(saved);
   const [pending, startTransition] = useTransition();
   const row = useRow();
-  // On /entry/[id] the note panel is a sibling that has to appear and vanish
-  // with this toggle; null everywhere else.
   const entry = useSaved();
+
+  const Icon = isSaved ? SaveCheck : SaveIcon;
+
+  const handleClick = () => {
+    const next = !isSaved;
+    setIsSaved(next);
+    entry?.setSaved(next);
+    const token = !next ? row?.unsave() : undefined;
+    startTransition(async () => {
+      try {
+        if (next) {
+          await addWord(entryId);
+        } else {
+          await removeWord(entryId);
+        }
+      } catch (error) {
+        console.error(error);
+        setIsSaved(!next);
+        entry?.setSaved(!next);
+        if (!next) row?.rollback(token);
+        toast.add({
+          type: "error",
+          title: "Couldn't save",
+          description: "Check your connection and try again.",
+        });
+      }
+    });
+  }
 
   return (
     <Button
@@ -34,36 +58,12 @@ export function SaveButton({
       size={size}
       disabled={pending}
       aria-pressed={isSaved}
-      onClick={() => {
-        const next = !isSaved;
-        setIsSaved(next);
-        entry?.setSaved(next);
-        // On /list an unsave takes the row off the page; on /search there is no
-        // row and this is a no-op.
-        const token = !next ? row?.unsave() : undefined;
-        startTransition(async () => {
-          try {
-            if (next) {
-              await addWord(entryId);
-            } else {
-              await removeWord(entryId);
-            }
-          } catch (error) {
-            console.error(error);
-            setIsSaved(!next);
-            entry?.setSaved(!next);
-            // Mirrors the forward guard above: only an unsave wrote an undo
-            // for this row, so only an unsave's failure replays it.
-            if (!next) row?.rollback(token);
-            toast.add({
-              type: "error",
-              title: "Couldn't save",
-              description: "Check your connection and try again.",
-            });
-          }
-        });
-      }}
+      onClick={handleClick}
     >
+      <Icon
+        data-icon="inline-start"
+        className="translate-y-[-4%]"
+      />
       {isSaved ? "Saved" : "Save"}
     </Button>
   );

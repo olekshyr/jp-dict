@@ -149,6 +149,11 @@
     @apply font-sans;
   }
 
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
   @media (min-width: 96rem) {
     html {
       font-size: 106.25%; /* 17px */
