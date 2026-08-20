@@ -29,7 +29,17 @@ export function ListFilterTabs({
 
   return (
     <Tabs value={filter} className="mb-6">
-      <TabsList>
+      {/*
+        Five labelled-and-badged tabs are wider than a phone, so the tabs scroll
+        inside the pill rather than the pill overflowing the page.
+
+        `max-w-full` is what caps it: the list is `w-fit`, and fit-content has
+        min-content as its floor — the labels are `whitespace-nowrap`, so that
+        floor is the full natural width and `w-fit` alone clamps nothing.
+        `justify-start` because centred overflow leaves the leading tabs
+        unreachable. Clipping is lifted at `sm`, where it only costs focus rings.
+      */}
+      <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none] sm:overflow-x-visible [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => {
           const count = f.value === "all" ? total : counts[f.value];
           const isActive = filter === f.value;
@@ -40,6 +50,9 @@ export function ListFilterTabs({
               // The tab is an anchor, not a <button>; without this Base UI
               // warns that it is stripping native button semantics.
               nativeButton={false}
+              // Chromium-only, and free where unsupported: opens the strip
+              // scrolled to the active filter instead of at "New".
+              className={isActive ? "[scroll-initial-target:nearest]" : ""}
               // Carries the chosen page size across tabs but deliberately not
               // the page: a different filter is a different list, so it starts
               // at the top.
