@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { entrySearch, furigana, users, userWords } from "@/lib/db/schema";
@@ -13,6 +13,7 @@ import {
   type ListFilter,
   type Previews,
 } from "@/lib/srs/grades";
+import type { HourBucket } from "@/lib/srs/forecast";
 import { bucketOf, preview } from "@/lib/srs/scheduler";
 import { requireUserId } from "./auth";
 
@@ -200,63 +201,15 @@ export async function getSavedWord(
   return { status: row.status as WordStatus, note: row.note };
 }
 
-export const SESSION_LIMIT = 20;
-/*
- * How many never-seen words a single session may introduce. Without a cap, a
- * user who saves fifty words in an afternoon gets fifty new cards and no
- * reviews, which is the one way to make spaced repetition worse than a list.
- */
-export const NEW_PER_SESSION = 5;
+/** A payload bound, not a session size. See "no cap on new words" in AGENTS.md. */
+const MAX_DECK = 500;
 
-/**
- * One review session: everything due, oldest first, topped up with a few new
- * words.
- *
- * Two queries rather than one, because the new-word cap is a separate limit and
- * SQL has no way to express "20 of these plus 5 of those" without a union that
- * gives up both index scans. Both are served by `user_words_due_idx`.
- *
- * `entry_id ASC` is not decoration: `due_at` ties are everywhere — every word
- * saved before the backfill shares one — and a LIMIT over a ranking key with
- * ties has no stable answer without a total order.
- */
+/** The review queue: everything due, oldest first. */
 export async function getReviewCards(): Promise<Card[]> {
   const userId = await requireUserId();
   const now = new Date();
 
-  const [reviews, fresh] = await Promise.all([
-    selectDue(userId, now, ne(userWords.state, 0), SESSION_LIMIT),
-    selectDue(userId, now, eq(userWords.state, 0), NEW_PER_SESSION),
-  ]);
-
-  const rows = [...reviews, ...fresh].slice(0, SESSION_LIMIT);
-
-  // Selection is deterministic; only the order the cards come up in is not.
-  // Grading a run of same-age words in a row is how you learn the order rather
-  // than the words.
-  for (let i = rows.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [rows[i], rows[j]] = [rows[j], rows[i]];
-  }
-
-  return rows.map((r) => ({
-    entryId: r.entryId,
-    headword: r.headword,
-    reading: r.reading,
-    romaji: r.romaji,
-    glosses: r.glossSummary,
-    ruby: r.ruby,
-    previews: preview(r, now),
-  }));
-}
-
-function selectDue(
-  userId: string,
-  now: Date,
-  state: ReturnType<typeof eq>,
-  limit: number,
-) {
-  return db
+  const rows = await db
     .select({
       entryId: userWords.entryId,
       dueAt: userWords.dueAt,
@@ -289,11 +242,26 @@ function selectDue(
         eq(userWords.userId, userId),
         eq(userWords.status, "todo"),
         lte(userWords.dueAt, now),
-        state,
       ),
     )
     .orderBy(asc(userWords.dueAt), asc(userWords.entryId))
-    .limit(limit);
+    .limit(MAX_DECK);
+
+  // Selection is deterministic; the order words come up in is not.
+  for (let i = rows.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+  }
+
+  return rows.map((r) => ({
+    entryId: r.entryId,
+    headword: r.headword,
+    reading: r.reading,
+    romaji: r.romaji,
+    glosses: r.glossSummary,
+    ruby: r.ruby,
+    previews: preview(r, now),
+  }));
 }
 
 /**
@@ -313,6 +281,41 @@ export async function getNextDueAt(): Promise<Date | null> {
     .limit(1);
 
   return row?.dueAt ?? null;
+}
+
+/**
+ * The coming week's workload, in hourly buckets — at most 168 rows.
+ *
+ * Hours, not days: the server has no timezone to resolve them against. See
+ * "the forecast is bucketed by hour" in AGENTS.md.
+ */
+export async function getDueForecast(): Promise<HourBucket[]> {
+  const userId = await requireUserId();
+
+  const rows = await db
+    .select({
+      // greatest(): everything overdue collapses into the current hour.
+      hour: sql<string>`greatest(
+        date_trunc('hour', ${userWords.dueAt}),
+        date_trunc('hour', now())
+      )`,
+      count: sql<string>`count(*)::text`,
+    })
+    .from(userWords)
+    .where(
+      and(
+        eq(userWords.userId, userId),
+        eq(userWords.status, "todo"),
+        sql`${userWords.dueAt} < now() + interval '7 days'`,
+      ),
+    )
+    .groupBy(sql`1`)
+    .orderBy(sql`1`);
+
+  return rows.map((r) => ({
+    hour: new Date(r.hour).toISOString(),
+    count: Number(r.count),
+  }));
 }
 
 /** The user's preferred flashcard front. Defaults to kanji for new users. */

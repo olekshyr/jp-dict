@@ -4,10 +4,12 @@ import { SparklesIcon } from "lucide-react";
 
 import { formatDueIn } from "@/lib/srs/grades";
 import {
+  getDueForecast,
   getFrontMode,
   getNextDueAt,
   getReviewCards,
 } from "@/lib/user-words/queries";
+import { DueForecast } from "./due-forecast";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -69,6 +71,10 @@ async function Session() {
   return <Flashcards cards={cards} initialMode={frontMode} />;
 }
 
+async function Forecast() {
+  return <DueForecast buckets={await getDueForecast()} />;
+}
+
 export default function ReviewPage() {
   return (
     <div>
@@ -76,6 +82,12 @@ export default function ReviewPage() {
       <Suspense fallback={<ReviewSkeleton />}>
         <Session />
       </Suspense>
+      {/* Its own boundary: the cards must not wait on a second round-trip. */}
+      <div className="mt-8">
+        <Suspense fallback={<Skeleton className="h-52 rounded-xl" />}>
+          <Forecast />
+        </Suspense>
+      </div>
     </div>
   );
 }

@@ -287,6 +287,42 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   `OR due_at IS NULL`, which forces a BitmapOr and gives up the index-served
   ordering. The column stays nullable in DDL only because tightening it would
   be a separate deploy.
+- **There is deliberately no cap on new words, and none on session size.** Both
+  existed once (`NEW_PER_SESSION`, `SESSION_LIMIT`) and neither limited anything:
+  a `LIMIT` is re-applied by every page load, so grade five, refresh, and the
+  next five arrive. The fix is not to make the cap real. Anki and WaniKani pace
+  intake because their pool is external — a deck you downloaded, or a
+  curriculum that gates lessons behind mastering prerequisite kanji. Here the
+  pool is assembled by hand, one dictionary search at a time, so intake is
+  already controlled at the point of saving and a second lever only adds a
+  reload ritual. The only bound left is `MAX_DECK`, and it is a payload guard,
+  not a pace: a serialized `Card` runs ~300–400 bytes, so 500 is ~175 KB and
+  stops a deck neglected into the thousands from shipping megabytes and running
+  FSRS over every row. If pacing is ever wanted it belongs to the user as a
+  setting, not to the app as a rule.
+- **The forecast is bucketed by hour because the app stores no timezone.**
+  `users` holds `id`, `front_mode`, `created_at` and nothing else, and the
+  server runs UTC, so it cannot know where a viewer's midnight falls — 23:00 UTC
+  is already tomorrow in Tokyo and still today in Los Angeles. `getDueForecast`
+  answers in hours, which are timezone-free and bounded at 168 rows however
+  large the deck; `toForecastDays` sums them into local days in the browser.
+  Two consequences worth keeping: the query clamps overdue rows to the current
+  hour with `greatest(…)`, or one neglected word yields a row per hour since it
+  was due; and `now() + 7 days` is exact rather than generous, because local
+  midnight today is always at or before now, so the seventh local day always
+  ends within 168 hours.
+- **`DueForecast` renders a skeleton until mounted, and that is not a loading
+  state.** Which local day an hour falls in depends on the viewer's clock, which
+  the server does not have, so any day it rendered risks a hydration mismatch.
+  The gate is `useSyncExternalStore` returning `false` on the server and `true`
+  after, not a `setState` in an effect — `react-hooks/set-state-in-effect`
+  rejects the latter, and it would re-render for nothing. Any client component
+  deriving calendar days needs the same treatment.
+- **Date formatting names its locale explicitly.** `toLocaleDateString` with
+  `undefined` takes the OS language, which in `lib/srs/forecast.ts` would have
+  translated "Wed" while the hardcoded "Today" and "Tomorrow" beside it stayed
+  English — the app is English throughout and stores no locale. Passing
+  `"en-US"` is the fix, and the same applies anywhere else `Intl` gets used.
 - **`lib/srs/grades.ts` must never import `ts-fsrs`.** It is the half of the
   scheduling module that client components are allowed to touch — grade labels,
   bucket names, interval formatting. Everything that actually schedules lives
