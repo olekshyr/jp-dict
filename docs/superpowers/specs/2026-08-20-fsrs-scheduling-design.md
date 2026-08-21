@@ -263,8 +263,14 @@ real place a word can be.
   when the session is empty. It is one indexed row on an index the session query
   already uses, run in the same `Promise.all` — cheaper than a second round-trip
   on the branch that needs it.
-- **No "suspend for now" in review.** Retiring is on `/list`. An "Easy" grade
-  schedules far enough out to be the same thing in practice.
+- **Deferring within a session is "Later", not a grade.** This shipped as a
+  follow-up: the four grades are all FSRS answers, so the only way to see a word
+  again this session was "Again", which also records a lapse and moves `due_at`
+  — and a refresh then showed a smaller deck. "Later" rotates the card to the
+  back of the client deck and writes nothing, so the word stays due. It is
+  deliberately not a fifth grade and not a member of `GRADES`.
+- **Retiring is still on `/list`, not in review.** An "Easy" grade schedules far
+  enough out to be the same thing in practice.
 
 ## Verification
 

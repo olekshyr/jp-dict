@@ -4,7 +4,7 @@
  * bundle. Everything that actually schedules lives in ./scheduler.
  */
 
-export const GRADES = ["again", "hard", "good", "easy"] as const;
+export const GRADES = ["easy", "good", "hard", "again"] as const;
 export type Grade = (typeof GRADES)[number];
 
 export const GRADE_LABELS: Record<Grade, string> = {

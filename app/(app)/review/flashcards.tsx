@@ -20,7 +20,7 @@ import type { Card, FrontMode } from "@/lib/user-words/queries";
 import type { RubySegment } from "@/lib/db/schema";
 import { FrontModeTabs } from "./front-mode-tabs";
 
-function Ruby({ segments, fallback }: { segments: RubySegment[] | null; fallback: string }) {
+function Ruby({ segments, fallback }: Readonly<{ segments: RubySegment[] | null; fallback: string }>) {
   if (!segments || segments.length === 0) return <>{fallback}</>;
   return (
     <ruby>
@@ -37,7 +37,7 @@ function Ruby({ segments, fallback }: { segments: RubySegment[] | null; fallback
 }
 
 /** What shows on the front of the card, given the chosen mode. */
-function Front({ card, mode }: { card: Card; mode: FrontMode }) {
+function Front({ card, mode }: Readonly<{ card: Card; mode: FrontMode }>) {
   switch (mode) {
     case "furigana":
       return (
@@ -56,7 +56,7 @@ function Front({ card, mode }: { card: Card; mode: FrontMode }) {
 }
 
 /** The reverse of whatever the front showed. */
-function Back({ card, mode }: { card: Card; mode: FrontMode }) {
+function Back({ card, mode }: Readonly<{ card: Card; mode: FrontMode }>) {
   if (mode === "english") {
     return (
       <div className="space-y-2 text-center">
@@ -68,6 +68,7 @@ function Back({ card, mode }: { card: Card; mode: FrontMode }) {
       </div>
     );
   }
+
   return (
     <div className="space-y-2 text-center">
       <div className="text-xl">{card.glosses}</div>
@@ -90,26 +91,10 @@ export function Flashcards({
   const [mode, setMode] = useState(initialMode);
   const [, startTransition] = useTransition();
 
-  /*
-   * The deck IS the session, and its head is the card on screen — there is no
-   * cursor, because nothing moves through the deck any more: a card is either
-   * answered and gone, or answered and sent to the back.
-   *
-   * Seeded from the server once and deliberately never re-synced. `cards` is a
-   * fresh selection on every call, so adopting a later one would hand back
-   * words already answered and reset the count.
-   */
   const [deck, setDeck] = useState(cards);
 
   const card = deck[0];
 
-  /*
-   * A passed card leaves the deck; "again" sends it to the back instead, so
-   * the counter tracks words not yet recalled rather than cards seen. Both
-   * schedule their state change before the transition, never inside it — an
-   * update scheduled inside an async transition is withheld until the write
-   * settles, which is the opposite of optimistic.
-   */
   function handleGrade(grade: Grade) {
     const graded = card;
     const passed = grade !== "again";
@@ -144,6 +129,11 @@ export function Flashcards({
         });
       }
     });
+  }
+
+  function handleSkip() {
+    setFlipped(false);
+    setDeck((d) => [...d.slice(1), d[0]]);
   }
 
   if (!card) {
@@ -192,11 +182,6 @@ export function Flashcards({
         }}
       />
 
-      {/*
-        Keyed on the entry id so a new card is a new element: the outgoing one
-        fades while the incoming one rises, which reads as a deck rather than
-        text being swapped in place.
-      */}
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={card.entryId}
@@ -223,26 +208,19 @@ export function Flashcards({
       <p className="mt-3 text-center text-sm text-muted-foreground">
         {deck.length} left
       </p>
-
-      {/*
-        One row, two states, one height. Grading a word you have not tried to
-        recall is not a review, so the grades genuinely cannot be here yet —
-        but a row of dead buttons reads as a broken control rather than a
-        locked one. The space holds the actual next step instead.
-      */}
       <div className="mt-6">
         {flipped ? (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-14 flex-col gap-0.5"
+              disabled={deck.length < 2}
+              onClick={handleSkip}
+            >
+              Later
+            </Button>
             {GRADES.map((grade) => (
-              /*
-                All four weighted the same. Anki fills "Good" because Space is
-                bound to it — the fill says what the default key does. There is
-                no such binding here, so a fill would only be a thumb on the
-                scale: these are four honest answers to "how well did you know
-                it", not one recommended action with three alternatives, and
-                nudging a torn user toward Good feeds the scheduler a grade they
-                did not mean.
-              */
               <Button
                 key={grade}
                 type="button"

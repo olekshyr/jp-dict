@@ -280,6 +280,12 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   then permanently due. The same-session retry is bought back in the client
   instead — "Again" sends the card to the back of the deck. Turning the flag on
   means giving `interval_days` sub-day resolution first.
+- **"Later" and "Again" are not the same deferral.** "Again" is an FSRS answer:
+  it records a lapse, moves `due_at`, and writes a `review_log` row, and the
+  deck re-queue above is a courtesy on top of that. "Later" writes nothing at
+  all, so a refresh brings the word straight back — it is still due and was
+  never answered. That is also why "Later" is not in `GRADES`: everything in
+  that tuple reaches `gradeSchema` and needs a `Rating` to map to.
 - **`due_at` is NOT NULL in practice for every row, and the review query
   depends on it.** Migration `0004` backfills it from `added_at` and `addWord`
   always sets it, so the session predicate is a clean `due_at <= now()` range

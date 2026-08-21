@@ -341,6 +341,70 @@ describe("Flashcards", () => {
     });
   });
 
+  describe("later", () => {
+    const later = () => screen.getByRole("button", { name: "Later" });
+
+    it("defers without telling the scheduler anything", () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      fireEvent.click(later());
+
+      expect(gradeCard).not.toHaveBeenCalled();
+    });
+
+    it("sends the card to the back without moving the counter", async () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      fireEvent.click(later());
+
+      expect(await screen.findByText("二")).toBeInTheDocument();
+      expect(screen.getByText(/3 left/)).toBeInTheDocument();
+    });
+
+    // Unlike the grades, which are unreachable until the answer is up: you can
+    // defer a word on sight, and also after seeing you had no idea.
+    it("is offered in both states", () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      expect(later()).toBeInTheDocument();
+      flip();
+      expect(later()).toBeInTheDocument();
+    });
+
+    it("hides the answer again for the next card", async () => {
+      renderFlashcards({ cards: deck, initialMode: "kanji" });
+
+      flip();
+      fireEvent.click(later());
+
+      expect(
+        await screen.findByRole("button", { name: "Reveal answer" }),
+      ).toBeInTheDocument();
+    });
+
+    it("comes back round after the rest of the deck", async () => {
+      renderFlashcards({
+        cards: [card(1, "一"), card(2, "二")],
+        initialMode: "kanji",
+      });
+
+      fireEvent.click(later());
+      expect(await screen.findByText("二")).toBeInTheDocument();
+
+      await grade("Good");
+      expect(await screen.findByText("一")).toBeInTheDocument();
+      expect(screen.getByText(/1 left/)).toBeInTheDocument();
+    });
+
+    // Rotating a one-card deck reproduces the same card, so an enabled button
+    // here would be a dead click rather than a deferral.
+    it("is disabled when there is nothing to defer past", () => {
+      renderFlashcards({ cards: [card(1, "一")], initialMode: "kanji" });
+
+      expect(later()).toBeDisabled();
+    });
+  });
+
   describe("front mode", () => {
     it("keeps the new front when the preference saves", async () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
