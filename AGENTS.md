@@ -278,14 +278,29 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   not two.** With short-term steps on, FSRS answers a failed card in minutes;
   that rounds to a 0-day interval and a `due_at` in the past, and the card is
   then permanently due. The same-session retry is bought back in the client
-  instead — "Again" sends the card to the back of the deck. Turning the flag on
-  means giving `interval_days` sub-day resolution first.
-- **"Later" and "Again" are not the same deferral.** "Again" is an FSRS answer:
-  it records a lapse, moves `due_at`, and writes a `review_log` row, and the
-  deck re-queue above is a courtesy on top of that. "Later" writes nothing at
-  all, so a refresh brings the word straight back — it is still due and was
-  never answered. That is also why "Later" is not in `GRADES`: everything in
-  that tuple reaches `gradeSchema` and needs a `Rating` to map to.
+  instead, by "Later" — see the next entry. Turning the flag on means giving
+  `interval_days` sub-day resolution first.
+- **"Later" defers; every grade answers. The two do not overlap.** `handleGrade`
+  drops the card for *all four* grades, "Again" included: a grade writes a
+  `review_log` row and moves `due_at`, so the word is no longer due and must
+  leave the deck — that is the only thing that keeps `{deck.length} left` equal
+  to what a refresh would hand back. "Later" is the opposite: it rotates the
+  card to the back of the deck and writes nothing, so the word is still due and
+  a refresh brings it straight back.
+
+  "Again" used to re-queue as well, and it was removed because the two
+  behaviours could not both be true of one button — the card stayed on the pile
+  while its due date had already moved, so the counter disagreed with the
+  database until a reload. The cost is real and was accepted: "record the lapse"
+  and "drill it again now" are now mutually exclusive, because with
+  `enable_short_term: false` there is no sub-day interval to schedule a retry
+  into.
+
+  "Later" is deliberately **not** in `GRADES`: everything in that tuple reaches
+  `gradeSchema` in `app/actions/words.ts` and needs a `Rating` to map to.
+  `GRADES` order is render order (easiest first, "Again" last), and
+  `lib/srs/scheduler.test.ts` asserts the intervals it produces descend — so
+  reordering it is a test change too.
 - **`due_at` is NOT NULL in practice for every row, and the review query
   depends on it.** Migration `0004` backfills it from `added_at` and `addWord`
   always sets it, so the session predicate is a clean `due_at <= now()` range

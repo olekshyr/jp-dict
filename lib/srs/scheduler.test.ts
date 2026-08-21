@@ -47,10 +47,11 @@ describe("schedule", () => {
     expect((next.dueAt as Date).getTime()).toBeGreaterThan(NOW.getTime());
   });
 
+  // GRADES runs easiest to hardest, so the intervals it produces must descend.
   it("gives a harder grade a shorter interval than an easier one", () => {
     const intervals = GRADES.map((g) => schedule(unseen(), g, NOW).next.intervalDays as number);
 
-    expect(intervals).toStrictEqual([...intervals].sort((a, b) => a - b));
+    expect(intervals).toStrictEqual([...intervals].sort((a, b) => b - a));
     expect(new Set(intervals).size).toBe(GRADES.length);
   });
 

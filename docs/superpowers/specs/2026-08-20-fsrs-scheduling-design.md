@@ -60,11 +60,16 @@ it disabled, every interval FSRS returns is a whole number of days ≥ 1 —
 verified directly in `lib/srs/scheduler.test.ts`, which asserts exactly that
 across new, once-reviewed and twice-reviewed cards.
 
-What that gives up is the same-session retry, and the client takes it back:
-answering "Again" sends the card to the *back of the deck* rather than dropping
-it, so the word comes round again before the session ends. The database sees a
-one-day interval and a lapse; the user sees the card again in two minutes.
-Nobody needs a sub-day column for that.
+What that gives up is the same-session retry, and the client takes it back with
+a **"Later"** button that rotates the card to the back of the deck and writes
+nothing. Nobody needs a sub-day column for that.
+
+> **Superseded 2026-08-21.** As shipped, it was *"Again"* that sent the card to
+> the back — the lapse was recorded and the word still came round again. That
+> could not hold: the card sat on the pile with a due date already moved to
+> tomorrow, so `{deck.length} left` disagreed with the database until a reload.
+> Grading and deferring were split into two buttons; see "Deferring within a
+> session" under Accepted trade-offs.
 
 A consequence worth writing down: with short-term steps off, FSRS never
 produces `State.Learning` or `State.Relearning`. Every card is `New` (0) or
@@ -79,9 +84,14 @@ in the browser bundle and gives the app two places that know how to schedule.
 
 Instead `getReviewCards` computes all four labels per card and ships them on the
 `Card` DTO, and `gradeCard` **returns** the fresh set for the card it just
-rescheduled. That return value is what makes the "Again" re-queue exact: the
-card goes to the back of the deck immediately with the labels it had, and they
-update when the write settles — long before it comes round again.
+rescheduled — which made the "Again" re-queue exact, since the card went to the
+back of the deck with the labels it had and picked up new ones when the write
+settled.
+
+> **Superseded 2026-08-21.** No grade re-queues any more, so nothing reads that
+> return value. `getReviewCards` shipping the previews on the `Card` DTO is
+> still what keeps `ts-fsrs` out of the browser; only `gradeCard`'s return is
+> now vestigial.
 
 The split that enforces this is `lib/srs/grades.ts` (vocabulary, labels and
 formatters, no `ts-fsrs` import) versus `lib/srs/scheduler.ts` (everything that
@@ -229,8 +239,9 @@ the back — so the card on screen is always the head, and the whole class of
 wrap-around index bugs the old tests guarded goes with it. The deck is still
 client-owned and still ignores later `cards` props.
 
-`{deck.length} left` now means words not yet recalled, because an "Again" leaves
-the card in the deck. That is a better counter than the old one.
+`{deck.length} left` means words still due — every grade drops its card, so the
+number always equals what a refresh would hand back. "Later" is the one control
+that leaves it unchanged, which is exactly right: it writes nothing.
 
 ### 7. `/list`
 
@@ -263,12 +274,21 @@ real place a word can be.
   when the session is empty. It is one indexed row on an index the session query
   already uses, run in the same `Promise.all` — cheaper than a second round-trip
   on the branch that needs it.
-- **Deferring within a session is "Later", not a grade.** This shipped as a
-  follow-up: the four grades are all FSRS answers, so the only way to see a word
-  again this session was "Again", which also records a lapse and moves `due_at`
-  — and a refresh then showed a smaller deck. "Later" rotates the card to the
-  back of the client deck and writes nothing, so the word stays due. It is
-  deliberately not a fifth grade and not a member of `GRADES`.
+- **Deferring within a session is "Later", not a grade** (added 2026-08-21).
+  Originally the only way to see a word again this session was "Again", which
+  is an FSRS answer — it records a lapse and moves `due_at`, so a refresh showed
+  a smaller deck than the counter did. "Later" rotates the card to the back of
+  the client deck and writes nothing, so the word stays due; `handleGrade` now
+  drops the card for all four grades. It renders in the grade row but is
+  deliberately not a member of `GRADES`, since everything in that tuple reaches
+  `gradeSchema` and needs a `Rating`.
+
+  **What this costs:** "record the lapse" and "drill it again now" became
+  mutually exclusive. With `enable_short_term: false` there is no sub-day
+  interval to schedule a retry into, so a word you fail and want to drill has to
+  be deferred with "Later" and graded on the pass where you actually answer it.
+  Accepted: one button cannot both move a due date and leave the word due, and
+  the counter lying about which had happened was the worse failure.
 - **Retiring is still on `/list`, not in review.** An "Easy" grade schedules far
   enough out to be the same thing in practice.
 

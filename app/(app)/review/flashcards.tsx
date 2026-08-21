@@ -95,33 +95,25 @@ export function Flashcards({
 
   const card = deck[0];
 
+  /*
+   * Every grade is an answer, so every grade moves the due date and drops the
+   * card — which is what keeps `deck.length` equal to what a refresh would
+   * hand back. Seeing a word again this session is "later", not "again".
+   */
   function handleGrade(grade: Grade) {
     const graded = card;
-    const passed = grade !== "again";
 
     setFlipped(false);
-    setDeck((d) => {
-      const rest = d.filter((c) => c.entryId !== graded.entryId);
-      return passed ? rest : [...rest, graded];
-    });
+    setDeck((d) => d.filter((c) => c.entryId !== graded.entryId));
 
     startTransition(async () => {
       try {
-        const previews = await gradeCard(graded.entryId, grade);
-        // The re-queued card comes back later in this session, so its buttons
-        // have to describe where it is now, not where it was.
-        if (!passed && previews) {
-          setDeck((d) =>
-            d.map((c) =>
-              c.entryId === graded.entryId ? { ...c, previews } : c,
-            ),
-          );
-        }
+        await gradeCard(graded.entryId, grade);
       } catch (error) {
         console.error(error);
         // Back to the head, so the word the user believes they answered is the
         // one the toast is about.
-        setDeck((d) => [graded, ...d.filter((c) => c.entryId !== graded.entryId)]);
+        setDeck((d) => [graded, ...d]);
         toast.add({
           type: "error",
           title: "Couldn't save",

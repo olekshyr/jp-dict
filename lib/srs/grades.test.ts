@@ -36,12 +36,13 @@ describe("guards", () => {
     expect(isListFilter("todo")).toBe(false);
   });
 
+  // Order is the order the buttons render in: easiest first, "Again" last.
   it("labels every grade", () => {
     expect(GRADES.map((g) => GRADE_LABELS[g])).toStrictEqual([
-      "Again",
-      "Hard",
-      "Good",
       "Easy",
+      "Good",
+      "Hard",
+      "Again",
     ]);
   });
 });

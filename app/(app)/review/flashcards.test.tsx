@@ -281,9 +281,6 @@ describe("Flashcards", () => {
       vi.spyOn(toast, "add").mockReturnValue("toast-id");
 
       renderFlashcards({ cards: deck, initialMode: "kanji" });
-      // "again" sends the card to the back; the rollback has to bring it all
-      // the way forward again, or the failure is invisible until the deck
-      // wraps round.
       await grade("Again");
 
       expect(screen.getByText(/3 left/)).toBeInTheDocument();
@@ -291,25 +288,23 @@ describe("Flashcards", () => {
     });
   });
 
+  /*
+   * "Again" is an answer like any other: it records a lapse and moves due_at to
+   * tomorrow, so the card leaves the deck and the counter agrees with what a
+   * refresh would hand back. Seeing a word again this session is "later".
+   */
   describe("again", () => {
-    it("sends the card to the back instead of dropping it", async () => {
+    it("drops the card like every other grade", async () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
       await grade("Again");
 
       expect(gradeCard).toHaveBeenCalledExactlyOnceWith(1, "again");
       expect(await screen.findByText("二")).toBeInTheDocument();
+      expect(screen.getByText(/2 left/)).toBeInTheDocument();
     });
 
-    it("does not move the counter — the word is still not known", async () => {
-      renderFlashcards({ cards: deck, initialMode: "kanji" });
-
-      await grade("Again");
-
-      expect(screen.getByText(/3 left/)).toBeInTheDocument();
-    });
-
-    it("comes back round after the rest of the deck", async () => {
+    it("does not bring the word back later in the session", async () => {
       renderFlashcards({
         cards: [card(1, "一"), card(2, "二")],
         initialMode: "kanji",
@@ -319,35 +314,31 @@ describe("Flashcards", () => {
       expect(await screen.findByText("二")).toBeInTheDocument();
 
       await grade("Good");
-      expect(await screen.findByText("一")).toBeInTheDocument();
-      expect(screen.getByText(/1 left/)).toBeInTheDocument();
+
+      expect(screen.getByText("Session complete")).toBeInTheDocument();
     });
 
-    it("takes fresh intervals from the write, since the card is coming back", async () => {
-      vi.mocked(gradeCard).mockResolvedValueOnce({
-        again: "1d",
-        hard: "4d",
-        good: "6d",
-        easy: "12d",
-      });
-
+    it("ends the session when it is the last card", async () => {
       renderFlashcards({ cards: [card(1, "一")], initialMode: "kanji" });
+
       await grade("Again");
 
-      // The same card is up again; its buttons must describe the schedule it
-      // just moved to, not the one it had when the deck was built.
-      flip();
-      expect(button("Good")).toHaveTextContent("6d");
+      expect(screen.getByText("Session complete")).toBeInTheDocument();
     });
   });
 
   describe("later", () => {
+    // The user put Later in the grade row, so it shares the row's flip gate.
     const later = () => screen.getByRole("button", { name: "Later" });
+    const defer = () => {
+      flip();
+      fireEvent.click(later());
+    };
 
     it("defers without telling the scheduler anything", () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      fireEvent.click(later());
+      defer();
 
       expect(gradeCard).not.toHaveBeenCalled();
     });
@@ -355,27 +346,17 @@ describe("Flashcards", () => {
     it("sends the card to the back without moving the counter", async () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      fireEvent.click(later());
+      defer();
 
       expect(await screen.findByText("二")).toBeInTheDocument();
+      // Nothing was written, so the word is still due and still owed an answer.
       expect(screen.getByText(/3 left/)).toBeInTheDocument();
-    });
-
-    // Unlike the grades, which are unreachable until the answer is up: you can
-    // defer a word on sight, and also after seeing you had no idea.
-    it("is offered in both states", () => {
-      renderFlashcards({ cards: deck, initialMode: "kanji" });
-
-      expect(later()).toBeInTheDocument();
-      flip();
-      expect(later()).toBeInTheDocument();
     });
 
     it("hides the answer again for the next card", async () => {
       renderFlashcards({ cards: deck, initialMode: "kanji" });
 
-      flip();
-      fireEvent.click(later());
+      defer();
 
       expect(
         await screen.findByRole("button", { name: "Reveal answer" }),
@@ -388,7 +369,7 @@ describe("Flashcards", () => {
         initialMode: "kanji",
       });
 
-      fireEvent.click(later());
+      defer();
       expect(await screen.findByText("二")).toBeInTheDocument();
 
       await grade("Good");
@@ -400,6 +381,7 @@ describe("Flashcards", () => {
     // here would be a dead click rather than a deferral.
     it("is disabled when there is nothing to defer past", () => {
       renderFlashcards({ cards: [card(1, "一")], initialMode: "kanji" });
+      flip();
 
       expect(later()).toBeDisabled();
     });
