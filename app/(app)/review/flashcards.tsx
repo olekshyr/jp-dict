@@ -27,7 +27,7 @@ function Ruby({ segments, fallback }: Readonly<{ segments: RubySegment[] | null;
       {segments.map((segment, i) => (
         <ruby key={i}>
           {segment.ruby}
-          <rt className="text-[0.35em] text-muted-foreground">
+          <rt className="text-[0.35em] mb-1 text-muted-foreground">
             {segment.rt ?? ""}
           </rt>
         </ruby>
