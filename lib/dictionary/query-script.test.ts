@@ -6,6 +6,7 @@ import {
   MAX_QUERY_LENGTH,
   clampQuery,
   detectScript,
+  escapeLikeContains,
   escapeLikePrefix,
   normalizeJapanese,
   normalizeRomaji,
@@ -67,6 +68,24 @@ describe("escapeLikePrefix", () => {
 
   it("trims before appending the wildcard", () => {
     expect(escapeLikePrefix("  cat  ")).toBe("cat%");
+  });
+});
+
+describe("escapeLikeContains", () => {
+  it("wraps the term in wildcards on both sides", () => {
+    expect(escapeLikeContains("cat")).toBe("%cat%");
+  });
+
+  it.each([
+    ["100%", "%100\\%%"],
+    ["a_b", "%a\\_b%"],
+    ["a\\b", "%a\\\\b%"],
+  ])("escapes %o the same way the prefix form does", (raw, expected) => {
+    expect(escapeLikeContains(raw)).toBe(expected);
+  });
+
+  it("trims before wrapping", () => {
+    expect(escapeLikeContains("  cat  ")).toBe("%cat%");
   });
 });
 

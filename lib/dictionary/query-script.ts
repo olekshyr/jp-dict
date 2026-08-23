@@ -54,8 +54,16 @@ export function detectScript(raw: string): QueryScript {
  *
  * Pair with `ESCAPE '\'` in the query.
  */
+function escapeLike(raw: string): string {
+  return raw.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 export function escapeLikePrefix(raw: string): string {
-  return `${raw.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  return `${escapeLike(raw)}%`;
+}
+
+export function escapeLikeContains(raw: string): string {
+  return `%${escapeLike(raw)}%`;
 }
 
 /**

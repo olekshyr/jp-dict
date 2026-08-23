@@ -28,7 +28,8 @@ const FILTERS: Array<{ value: FilterValue; label: string }> = [
 export function ListFilterTabs({
   filter,
   perPage,
-}: Readonly<{ filter: FilterValue; perPage: number }>) {
+  query = "",
+}: Readonly<{ filter: FilterValue; perPage: number; query?: string }>) {
   const counts = useListCounts();
   const total = LIST_FILTERS.reduce((sum, key) => sum + counts[key], 0);
 
@@ -58,9 +59,9 @@ export function ListFilterTabs({
               // Chromium-only, and free where unsupported: opens the strip
               // scrolled to the active filter instead of at "New".
               className={isActive ? "[scroll-initial-target:nearest]" : ""}
-              // Carries the chosen page size across tabs but deliberately not
-              // the page: a different filter is a different list, so it starts
-              // at the top.
+              // Carries the chosen page size and the active search across tabs
+              // but deliberately not the page: a different filter is a
+              // different list, so it starts at the top.
               render={
                 isActive ? (
                   <span />
@@ -68,6 +69,7 @@ export function ListFilterTabs({
                   <Link
                     href={paginationHref("/list", {
                       filter: f.value,
+                      q: query,
                       perPage,
                     })}
                   />

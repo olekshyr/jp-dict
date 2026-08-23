@@ -21,11 +21,12 @@ const renderTabs = (
   filter: ListFilter | "all",
   perPage = 10,
   counts: Counts = { new: 3, learning: 4, mature: 2, paused: 1 },
+  query = "",
 ) =>
   render(
     <NavPendingProvider>
       <ListSession counts={counts}>
-        <ListFilterTabs filter={filter} perPage={perPage} />
+        <ListFilterTabs filter={filter} perPage={perPage} query={query} />
       </ListSession>
     </NavPendingProvider>,
   );
@@ -51,6 +52,20 @@ describe("ListFilterTabs", () => {
     renderTabs("all", 20);
 
     expect(hrefOf("New")).not.toContain("page=");
+  });
+
+  it("carries the active search across a filter change", () => {
+    renderTabs("new", 10, { new: 3, learning: 4, mature: 2, paused: 1 }, "ねこ");
+
+    expect(hrefOf("Mature")).toBe(
+      `/list?filter=mature&q=${encodeURIComponent("ねこ")}`,
+    );
+  });
+
+  it("leaves q out of the hrefs when nothing is being searched", () => {
+    renderTabs("new");
+
+    expect(hrefOf("Mature")).toBe("/list?filter=mature");
   });
 
   it("offers a tab for every bucket, paused included", () => {

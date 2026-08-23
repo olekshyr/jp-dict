@@ -187,6 +187,23 @@ threat model: `docs/superpowers/specs/2026-08-03-auth-guard-dictionary-queries-d
   fixtures, which pin URL vocabulary and should fail loudly; and the
   `term_type` strings in `scripts/`, which live in hand-written SQL that a
   rename would not fix anyway — that one needs a re-import, not a migration.
+- **`/list`'s `?q` searches the list, not the dictionary, and its counts are
+  match counts.** `queryFilter` in `lib/user-words/queries.ts` routes the query
+  through the same `detectScript` / `normalizeJapanese` / `normalizeRomaji`
+  helpers as `/search`, so both boxes answer alike, and adds a substring `ILIKE`
+  on `user_words.note` — a note can be in any language, so it is matched
+  whatever the script. Two deliberate differences from the dictionary: no
+  trigram fallback (the user is filtering a few hundred words they saved
+  themselves, not guessing at 218k), and the predicate is built from correlated
+  `EXISTS` subqueries rather than joins, so the one fragment drops unchanged
+  into `getMyWordCounts`, which joins nothing. Nothing here is index-served; the
+  scan is over one user's own rows, which is what makes that affordable.
+
+  `getMyWordCounts` takes the query for a reason that is easy to undo: `total`
+  in `app/(app)/list/page.tsx` is summed from those counts and is what
+  pagination and the page clamp read. Counting the whole library while listing
+  matches would put the badges, the row count and the page links into three-way
+  disagreement.
 - The app uses the neon-http driver (one HTTP request per statement); the
   importer uses a plain `pg` TCP connection and a direct (unpooled) URL.
 - `data/` (60 MB `JMdict_e.xml`, 33 MB `JmdictFurigana.json`) is gitignored and
@@ -291,6 +308,12 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   input must never be one — with `cacheLife('max')` that is unbounded permanent
   entries. `searchEntries` is deliberately *not* cached itself: it clamps the
   query and delegates to a cached inner function, which is the pattern to copy.
+- **`SearchField` is shared by two routes, so its defaults are `/search`'s.**
+  `pathname`, `params`, `placeholder` and `label` are props; the dictionary
+  callers (`/search`, the entry page) pass none of them and get today's
+  behaviour. `params` is spread *before* `q` and `perPage` so the existing
+  `?q=…&perPage=…` order survives — several tests assert on the whole URL
+  string. A route adding a third search box changes props here, not a fork.
 - **`useLinkStatus` is the only way to observe a `<Link>` click**, and it must
   be called from a descendant of that `<Link>`. An `onClick` is not a
   substitute: it also fires for ⌘-click and middle-click, which open a new tab

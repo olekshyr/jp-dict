@@ -1,10 +1,25 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { entrySearch, furigana, users, userWords } from "@/lib/db/schema";
+import {
+  entrySearch,
+  furigana,
+  TERM_TYPE,
+  users,
+  userWords,
+} from "@/lib/db/schema";
 import type { RubySegment } from "@/lib/db/schema";
+import {
+  clampQuery,
+  detectScript,
+  escapeLikeContains,
+  escapeLikePrefix,
+  normalizeJapanese,
+  normalizeRomaji,
+  SCRIPT,
+} from "@/lib/dictionary/query-script";
 import {
   ALL,
   BUCKET,
@@ -44,6 +59,33 @@ const bucketSql = sql<ListFilter>`case
       and coalesce(${userWords.intervalDays}, 0) >= ${MATURE_DAYS} then ${BUCKET.mature}::text
     else ${BUCKET.learning}::text
   end`;
+
+function queryFilter(raw: string): SQL | undefined {
+  const q = clampQuery(raw);
+  if (q.length === 0) return undefined;
+
+  const note = sql`${userWords.note} ilike ${escapeLikeContains(q)} escape '\\'`;
+
+  if (detectScript(q) === SCRIPT.japanese) {
+    return sql`(exists (
+      select 1 from search_terms st
+      where st.entry_id = ${userWords.entryId}
+        and st.term_type in (${TERM_TYPE.kanji}, ${TERM_TYPE.kana})
+        and st.term like ${escapeLikePrefix(normalizeJapanese(q))} escape '\\'
+    ) or ${note})`;
+  }
+
+  return sql`(exists (
+    select 1 from search_terms st
+    where st.entry_id = ${userWords.entryId}
+      and st.term_type = ${TERM_TYPE.romaji}
+      and st.term = ${normalizeRomaji(q)}
+  ) or exists (
+    select 1 from entry_search es
+    where es.entry_id = ${userWords.entryId}
+      and es.gloss_tsv @@ plainto_tsquery('simple', ${q})
+  ) or ${note})`;
+}
 
 /** A row in the user's list. A DTO, not a table row — no SRS internals leak. */
 export type SavedWord = {
@@ -88,6 +130,7 @@ export type { FrontMode };
  */
 export async function getMyWords(
   filter: FilterValue,
+  query: string,
   limit: number,
   offset: number,
 ): Promise<SavedWord[]> {
@@ -108,9 +151,11 @@ export async function getMyWords(
     .from(userWords)
     .innerJoin(entrySearch, eq(entrySearch.entryId, userWords.entryId))
     .where(
-      filter === ALL
-        ? eq(userWords.userId, userId)
-        : and(eq(userWords.userId, userId), sql`${bucketSql} = ${filter}`),
+      and(
+        eq(userWords.userId, userId),
+        filter === ALL ? undefined : sql`${bucketSql} = ${filter}`,
+        queryFilter(query),
+      ),
     )
     .orderBy(desc(userWords.addedAt))
     .limit(limit)
@@ -128,8 +173,7 @@ export async function getMyWords(
   }));
 }
 
-/** Counts by bucket, for the filter tabs. */
-export async function getMyWordCounts(): Promise<Counts> {
+export async function getMyWordCounts(query: string): Promise<Counts> {
   const userId = await requireUserId();
 
   const rows = await db
@@ -138,7 +182,7 @@ export async function getMyWordCounts(): Promise<Counts> {
       count: sql<string>`count(*)::text`,
     })
     .from(userWords)
-    .where(eq(userWords.userId, userId))
+    .where(and(eq(userWords.userId, userId), queryFilter(query)))
     /*
      * By ordinal, not by repeating `bucketSql`. Drizzle renders a fragment
      * fresh at each use site and numbers its bind parameters per rendering, so

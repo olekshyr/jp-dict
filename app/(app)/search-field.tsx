@@ -12,12 +12,20 @@ import { useNavPending } from "./nav-pending";
 
 export function SearchField({
   defaultValue = "",
+  pathname = "/search",
+  params,
   perPage,
+  placeholder = "Search 猫, ねこ, neko or cat…",
+  label = "Search the dictionary",
   autoFocus = false,
   disabled = false,
 }: Readonly<{
   defaultValue?: string;
+  pathname?: string;
+  params?: Record<string, string | number | undefined>;
   perPage?: number;
+  placeholder?: string;
+  label?: string;
   autoFocus?: boolean;
   disabled?: boolean;
 }>) {
@@ -34,7 +42,7 @@ export function SearchField({
           new FormData(event.currentTarget).get("q") ?? "",
         ).trim();
         startNavigation(() => {
-          router.push(paginationHref("/search", { q: next, perPage }));
+          router.push(paginationHref(pathname, { ...params, q: next, perPage }));
         });
       }}
     >
@@ -44,8 +52,8 @@ export function SearchField({
             className="h-11 rounded-lg px-4 pr-11 text-base md:text-base"
             name="q"
             defaultValue={defaultValue}
-            placeholder="Search 猫, ねこ, neko or cat…"
-            aria-label="Search the dictionary"
+            placeholder={placeholder}
+            aria-label={label}
             autoComplete="off"
             autoFocus={autoFocus}
             disabled={disabled}

@@ -5,16 +5,11 @@ import { router } from "@/test/next-navigation";
 import { NavPendingProvider } from "./nav-pending";
 import { SearchField } from "./search-field";
 
-/**
- * The provider is mounted in the (app) layout in the real app, so every render
- * here goes through it. `useNavPending` throws without one — asserted below,
- * since that is the point of dropping the old fallback-to-private-transition.
- */
 const renderField = (ui: React.ReactElement) =>
   render(<NavPendingProvider>{ui}</NavPendingProvider>);
 
-const submit = async (query: string) => {
-  const input = screen.getByLabelText("Search the dictionary");
+const submit = async (query: string, label = "Search the dictionary") => {
+  const input = screen.getByLabelText(label);
   fireEvent.change(input, { target: { value: query } });
   await act(async () => {
     fireEvent.submit(input.closest("form")!);
@@ -73,9 +68,6 @@ describe("SearchField", () => {
   });
 
   it("refuses to mount outside a NavPendingProvider", () => {
-    // The provider is in the (app) layout, so an absent one means the field has
-    // been mounted somewhere it cannot report a navigation from. Failing loudly
-    // beats silently losing the spinner.
     expect(() => render(<SearchField />)).toThrow(/NavPendingProvider/);
   });
 
@@ -105,5 +97,41 @@ describe("SearchField", () => {
     renderField(<SearchField disabled />);
 
     expect(screen.getByRole("button", { name: "Search" })).toBeDisabled();
+  });
+
+  it("submits to another route", async () => {
+    renderField(<SearchField pathname="/list" />);
+    await submit("neko");
+
+    expect(router.push).toHaveBeenCalledExactlyOnceWith("/list?q=neko");
+  });
+
+  it("carries the route's own params through the new query", async () => {
+    renderField(<SearchField pathname="/list" params={{ filter: "mature" }} />);
+    await submit("neko");
+
+    expect(router.push).toHaveBeenCalledExactlyOnceWith(
+      "/list?filter=mature&q=neko",
+    );
+  });
+
+  it("drops a param the route left undefined", async () => {
+    renderField(<SearchField pathname="/list" params={{ filter: undefined }} />);
+    await submit("neko");
+
+    expect(router.push).toHaveBeenCalledExactlyOnceWith("/list?q=neko");
+  });
+
+  it("keeps the route's params when the query is cleared", async () => {
+    renderField(<SearchField pathname="/list" params={{ filter: "paused" }} />);
+    await submit("  ");
+
+    expect(router.push).toHaveBeenCalledExactlyOnceWith("/list?filter=paused");
+  });
+
+  it("labels itself for the route it belongs to", async () => {
+    renderField(<SearchField label="Search my saved words" />);
+
+    expect(screen.getByLabelText("Search my saved words")).toBeInTheDocument();
   });
 });
