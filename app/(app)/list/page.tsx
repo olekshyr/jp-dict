@@ -3,7 +3,12 @@ import Link from "next/link";
 import { BookmarkIcon } from "lucide-react";
 
 import { getMyWordCounts, getMyWords } from "@/lib/user-words/queries";
-import { isListFilter, LIST_FILTERS, type ListFilter } from "@/lib/srs/grades";
+import {
+  ALL,
+  isListFilter,
+  LIST_FILTERS,
+  type FilterValue,
+} from "@/lib/srs/grades";
 import { pageCount, parsePagination } from "@/lib/pagination";
 import {
   Empty,
@@ -50,8 +55,8 @@ export const unstable_instant = {
  * under the old todo/learned split, landing on "learned" would have shown a
  * graveyard.
  */
-function parseFilter(raw?: string): ListFilter | "all" {
-  return raw && isListFilter(raw) ? raw : "all";
+function parseFilter(raw?: string): FilterValue {
+  return raw && isListFilter(raw) ? raw : ALL;
 }
 
 function ListSkeleton() {
@@ -85,7 +90,7 @@ async function WordList({
    * only runs in that one case rather than on every load.
    */
   const total =
-    filter === "all"
+    filter === ALL
       ? LIST_FILTERS.reduce((sum, key) => sum + counts[key], 0)
       : counts[filter];
   const page = Math.min(requestedPage, pageCount(total, perPage));

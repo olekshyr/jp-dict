@@ -3,18 +3,24 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
-import type { Bucket, ListFilter } from "@/lib/srs/grades";
-import type { WordStatus } from "@/lib/user-words/queries";
+import {
+  ALL,
+  PAUSED,
+  type Bucket,
+  type FilterValue,
+  type ListFilter,
+} from "@/lib/srs/grades";
+import { STATUS, type WordStatus } from "@/lib/user-words/status";
 import { RowContext, type RowApi } from "../row-context";
 import { negate, useListDispatch, type CountDelta } from "./list-session";
 
 /*
- * Which tab a row shows under. Retiring never touches the schedule, so a word
- * keeps its bucket the whole time it is retired and returns to it on the way
+ * Which tab a row shows under. Pausing never touches the schedule, so a word
+ * keeps its bucket the whole time it is paused and returns to it on the way
  * back — which is what makes this a two-way toggle rather than a state machine.
  */
 const shownIn = (status: WordStatus, bucket: Bucket): ListFilter =>
-  status === "learned" ? "retired" : bucket;
+  status === STATUS.paused ? PAUSED : bucket;
 
 /**
  * One row's optimistic state.
@@ -30,7 +36,7 @@ export function ListRow({
   bucket,
   children,
 }: Readonly<{
-  filter: ListFilter | "all";
+  filter: FilterValue;
   status: WordStatus;
   bucket: Bucket;
   children: React.ReactNode;
@@ -60,7 +66,7 @@ export function ListRow({
         // A row that no longer matches the active filter does not belong on
         // this page. Under `all` every bucket matches, so it stays put and only
         // its button label flips.
-        if (filter !== "all" && into !== filter) setRemoved(true);
+        if (filter !== ALL && into !== filter) setRemoved(true);
         return token;
       },
       unsave() {

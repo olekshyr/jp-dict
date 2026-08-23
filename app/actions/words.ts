@@ -8,6 +8,8 @@ import { reviewLog, users, userWords } from "@/lib/db/schema";
 import { GRADES, type Previews } from "@/lib/srs/grades";
 import { schedule } from "@/lib/srs/scheduler";
 import { requireUserId } from "@/lib/user-words/auth";
+import { FRONT_MODES } from "@/lib/user-words/front-mode";
+import { STATUS } from "@/lib/user-words/status";
 
 /*
  * Server Actions are reachable by direct POST, not just through the UI, so
@@ -32,9 +34,9 @@ const entryIdSchema = z.coerce
   .int()
   .positive()
   .max(Number.MAX_SAFE_INTEGER);
-const statusSchema = z.enum(["todo", "learned"]);
+const statusSchema = z.enum([STATUS.active, STATUS.paused]);
 const gradeSchema = z.enum(GRADES);
-const frontModeSchema = z.enum(["kanji", "furigana", "romaji", "english"]);
+const frontModeSchema = z.enum(FRONT_MODES);
 /*
  * The only free-form user text the app accepts. `z.string()` is doing real work
  * beyond typing — without it an array or object would be bound as a query
@@ -74,11 +76,11 @@ export async function removeWord(rawEntryId: unknown) {
 }
 
 /**
- * Retires a word from rotation, or puts it back.
+ * Pauses reviews for a word, or resumes them.
  *
  * Deliberately touches nothing but `status`: the scheduling columns are left
  * exactly as they were, so putting a word back resumes its existing schedule
- * rather than restarting it from new. A word retired for a year comes back
+ * rather than restarting it from new. A word paused for a year comes back
  * overdue, which is the honest answer.
  */
 export async function setStatus(rawEntryId: unknown, rawStatus: unknown) {
@@ -90,7 +92,7 @@ export async function setStatus(rawEntryId: unknown, rawStatus: unknown) {
     .update(userWords)
     .set({
       status,
-      learnedAt: status === "learned" ? new Date() : null,
+      learnedAt: status === STATUS.paused ? new Date() : null,
     })
     // Scoped by userId as well as entryId: without it, any signed-in user could
     // mutate another user's row by guessing an entry id.

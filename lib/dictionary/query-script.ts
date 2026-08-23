@@ -6,7 +6,13 @@ import { isJapanese, isKana, toHiragana, toRomaji } from "wanakana";
  * Japanese input is looked up by prefix against kanji/kana surface forms;
  * Latin input could be either romaji or an English gloss, so it tries both.
  */
-export type QueryScript = "japanese" | "latin" | "empty";
+export const SCRIPT = {
+  japanese: "japanese",
+  latin: "latin",
+  empty: "empty",
+} as const;
+
+export type QueryScript = (typeof SCRIPT)[keyof typeof SCRIPT];
 
 /**
  * The longest query the dictionary will look at.
@@ -34,12 +40,12 @@ export function clampQuery(raw: string): string {
 
 export function detectScript(raw: string): QueryScript {
   const q = raw.trim();
-  if (q.length === 0) return "empty";
+  if (q.length === 0) return SCRIPT.empty;
   // isJapanese covers kana, kanji and Japanese punctuation.
   if ([...q].some((char) => isJapanese(char) && !/\s/.test(char))) {
-    return "japanese";
+    return SCRIPT.japanese;
   }
-  return "latin";
+  return SCRIPT.latin;
 }
 
 /**

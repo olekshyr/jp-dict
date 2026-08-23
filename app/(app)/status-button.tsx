@@ -3,22 +3,23 @@
 import { useState, useTransition } from "react";
 
 import { setStatus } from "@/app/actions/words";
+import { STATUS, type WordStatus } from "@/lib/user-words/status";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { useRow } from "./row-context";
 
-/** Takes a word out of review rotation, or puts it back. */
+/** Pauses reviews for a word, or resumes them. */
 export function StatusButton({
   entryId,
   status,
 }: {
   entryId: number;
-  status: "todo" | "learned";
+  status: WordStatus;
 }) {
   const [current, setCurrent] = useState(status);
   const [pending, startTransition] = useTransition();
   const row = useRow();
-  const next = current === "learned" ? "todo" : "learned";
+  const next = current === STATUS.paused ? STATUS.active : STATUS.paused;
 
   return (
     <Button
@@ -45,7 +46,7 @@ export function StatusButton({
         });
       }}
     >
-      {current === "learned" ? "Put back" : "Retire"}
+      {current === STATUS.paused ? "Resume reviews" : "Pause reviews"}
     </Button>
   );
 }

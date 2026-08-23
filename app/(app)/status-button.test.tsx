@@ -10,7 +10,7 @@ describe("StatusButton", () => {
     render(<StatusButton entryId={7} status="todo" />);
 
     expect(
-      screen.getByRole("button", { name: "Retire" }),
+      screen.getByRole("button", { name: "Pause reviews" }),
     ).toBeInTheDocument();
   });
 
@@ -18,7 +18,7 @@ describe("StatusButton", () => {
     render(<StatusButton entryId={7} status="learned" />);
 
     expect(
-      screen.getByRole("button", { name: "Put back" }),
+      screen.getByRole("button", { name: "Resume reviews" }),
     ).toBeInTheDocument();
   });
 
@@ -26,7 +26,7 @@ describe("StatusButton", () => {
     render(<StatusButton entryId={7} status="todo" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Retire" }));
+      fireEvent.click(screen.getByRole("button", { name: "Pause reviews" }));
     });
 
     expect(setStatus).toHaveBeenCalledExactlyOnceWith(7, "learned");
@@ -36,7 +36,7 @@ describe("StatusButton", () => {
     render(<StatusButton entryId={7} status="learned" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Put back" }));
+      fireEvent.click(screen.getByRole("button", { name: "Resume reviews" }));
     });
 
     expect(setStatus).toHaveBeenCalledExactlyOnceWith(7, "todo");
@@ -46,11 +46,11 @@ describe("StatusButton", () => {
     render(<StatusButton entryId={42} status="todo" />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Retire" }));
+      fireEvent.click(screen.getByRole("button", { name: "Pause reviews" }));
     });
 
     expect(
-      screen.getByRole("button", { name: "Put back" }),
+      screen.getByRole("button", { name: "Resume reviews" }),
     ).toBeInTheDocument();
   });
 
@@ -60,11 +60,11 @@ describe("StatusButton", () => {
 
     render(<StatusButton entryId={42} status="todo" />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Retire" }));
+      fireEvent.click(screen.getByRole("button", { name: "Pause reviews" }));
     });
 
     expect(
-      screen.getByRole("button", { name: "Retire" }),
+      screen.getByRole("button", { name: "Pause reviews" }),
     ).toBeInTheDocument();
     expect(add).toHaveBeenCalledWith(
       expect.objectContaining({ type: "error" }),

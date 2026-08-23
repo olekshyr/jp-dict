@@ -20,7 +20,7 @@ import { ListSession } from "./list-session";
 const renderTabs = (
   filter: ListFilter | "all",
   perPage = 10,
-  counts: Counts = { new: 3, learning: 4, mature: 2, retired: 1 },
+  counts: Counts = { new: 3, learning: 4, mature: 2, paused: 1 },
 ) =>
   render(
     <NavPendingProvider>
@@ -38,7 +38,7 @@ describe("ListFilterTabs", () => {
     renderTabs("new");
 
     expect(screen.getByText("New").closest("a")).toBeNull();
-    expect(hrefOf("Retired")).toBe("/list?filter=retired");
+    expect(hrefOf("Paused")).toBe("/list?filter=paused");
   });
 
   it("carries a non-default page size across a filter change", () => {
@@ -53,16 +53,16 @@ describe("ListFilterTabs", () => {
     expect(hrefOf("New")).not.toContain("page=");
   });
 
-  it("offers a tab for every bucket, retired included", () => {
+  it("offers a tab for every bucket, paused included", () => {
     renderTabs("all");
 
-    for (const label of ["New", "Learning", "Mature", "Retired", "All"]) {
+    for (const label of ["New", "Learning", "Mature", "Paused", "All"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
 
   it("sums every bucket for All", () => {
-    renderTabs("new", 10, { new: 3, learning: 4, mature: 2, retired: 1 });
+    renderTabs("new", 10, { new: 3, learning: 4, mature: 2, paused: 1 });
 
     expect(screen.getByText("All").parentElement).toHaveTextContent("10");
   });
@@ -80,7 +80,7 @@ describe("ListFilterTabs", () => {
     setLinkPending(true);
     render(
       <NavPendingProvider>
-        <ListSession counts={{ new: 3, learning: 4, mature: 2, retired: 1 }}>
+        <ListSession counts={{ new: 3, learning: 4, mature: 2, paused: 1 }}>
           <ListFilterTabs filter="new" perPage={10} />
         </ListSession>
         <PendingContent>

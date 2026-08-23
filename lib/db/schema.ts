@@ -15,6 +15,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { DEFAULT_FRONT_MODE } from "@/lib/user-words/front-mode";
+import { STATUS } from "@/lib/user-words/status";
 
 /** Postgres `tsvector`. Drizzle has no built-in, so declare it once here. */
 const tsvector = customType<{ data: string }>({
@@ -166,6 +168,16 @@ export const furigana = pgTable(
  * by the importer, nothing references them, and every lookup goes through the
  * three indexes below. A surrogate id cost 22 MB doing nothing.
  */
+/*
+ * The three `search_terms.term_type` values. Written only by the importer,
+ * in raw SQL — a rename here would need a re-import, not a migration.
+ */
+export const TERM_TYPE = {
+  kanji: "kanji",
+  kana: "kana",
+  romaji: "romaji",
+} as const;
+
 export const searchTerms = pgTable(
   "search_terms",
   {
@@ -173,7 +185,7 @@ export const searchTerms = pgTable(
       .notNull()
       .references(() => entries.id, { onDelete: "cascade" }),
     term: text("term").notNull(),
-    /** "kanji" | "kana" | "romaji" */
+    /** One of `TERM_TYPE`. Written only by the importer. */
     termType: text("term_type").notNull(),
     /** Ranking weight; lower sorts first. Common kanji 0 … romaji 3. */
     weight: smallint("weight").notNull().default(2),
@@ -234,8 +246,8 @@ export const entrySearch = pgTable(
 export const users = pgTable("users", {
   /** Clerk user id. Rows are lazily upserted on first write — no webhook. */
   id: text("id").primaryKey(),
-  /** Which side of the flashcard leads: kanji | furigana | romaji | english. */
-  frontMode: text("front_mode").notNull().default("kanji"),
+  /** Which side of the flashcard leads. One of `FRONT_MODE`. */
+  frontMode: text("front_mode").notNull().default(DEFAULT_FRONT_MODE),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -254,12 +266,12 @@ export const userWords = pgTable(
     entryId: bigint("entry_id", { mode: "number" })
       .notNull()
       .references(() => entries.id, { onDelete: "cascade" }),
-    /** "todo" = in rotation, "learned" = retired. */
-    status: text("status").notNull().default("todo"),
+    /** See `STATUS` — the stored values predate the "paused" vocabulary. */
+    status: text("status").notNull().default(STATUS.active),
     addedAt: timestamp("added_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    /** When the word was retired from rotation; cleared when it goes back in. */
+    /** When reviews were paused for the word; cleared when they resume. */
     learnedAt: timestamp("learned_at", { withTimezone: true }),
 
     /*

@@ -14,27 +14,37 @@ export const GRADE_LABELS: Record<Grade, string> = {
   easy: "Easy",
 };
 
-export const BUCKETS = ["new", "learning", "mature"] as const;
+export const BUCKET = {
+  new: "new",
+  learning: "learning",
+  mature: "mature",
+} as const;
+export const BUCKETS = [BUCKET.new, BUCKET.learning, BUCKET.mature] as const;
 export type Bucket = (typeof BUCKETS)[number];
 
 /** Anki's threshold for a card that has left the fragile early intervals. */
 export const MATURE_DAYS = 21;
 
 /**
- * What `/list` filters by: the three schedule-derived buckets, plus retired.
+ * What `/list` filters by: the three schedule-derived buckets, plus paused.
  *
  * Lives here rather than beside the queries because the tab strip and every
  * row are client components, and `lib/user-words/queries.ts` is `server-only`.
  */
-export type ListFilter = Bucket | "retired";
-export const LIST_FILTERS = [...BUCKETS, "retired"] as const;
+export const PAUSED = "paused";
+export const ALL = "all";
+export type ListFilter = Bucket | typeof PAUSED;
+export const LIST_FILTERS = [...BUCKETS, PAUSED] as const;
 export type Counts = Record<ListFilter, number>;
 
+/** What `?filter=` can hold: one bucket, paused, or the unfiltered list. */
+export type FilterValue = ListFilter | typeof ALL;
+
 export const FILTER_LABELS: Record<ListFilter, string> = {
-  new: "New",
-  learning: "Learning",
-  mature: "Mature",
-  retired: "Retired",
+  [BUCKET.new]: "New",
+  [BUCKET.learning]: "Learning",
+  [BUCKET.mature]: "Mature",
+  [PAUSED]: "Paused",
 };
 
 export function isListFilter(value: string): value is ListFilter {

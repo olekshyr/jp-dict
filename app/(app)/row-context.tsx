@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 
-import type { WordStatus } from "@/lib/user-words/queries";
+import type { WordStatus } from "@/lib/user-words/status";
 
 export type RowApi = {
   /**

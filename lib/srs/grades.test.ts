@@ -24,12 +24,12 @@ describe("guards", () => {
 
   it("accepts only the derived buckets", () => {
     expect(isBucket("mature")).toBe(true);
-    // "retired" comes from `status`, not from the schedule.
-    expect(isBucket("retired")).toBe(false);
+    // "paused" comes from `status`, not from the schedule.
+    expect(isBucket("paused")).toBe(false);
     expect(isBucket("all")).toBe(false);
   });
 
-  it("accepts every list filter, retired included", () => {
+  it("accepts every list filter, paused included", () => {
     expect(LIST_FILTERS.every(isListFilter)).toBe(true);
     // "all" is a URL value the list page understands, not a bucket a row is in.
     expect(isListFilter("all")).toBe(false);

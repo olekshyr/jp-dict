@@ -6,11 +6,11 @@ import { NavPendingProvider } from "../nav-pending";
 import { ListFilterTabs } from "./list-filter-tabs";
 import { ListSession, useListDispatch } from "./list-session";
 
-/** Dispatches a "retired one new word" delta on click. */
+/** Dispatches a "paused one new word" delta on click. */
 function MoveOne() {
   const dispatch = useListDispatch();
   return (
-    <button type="button" onClick={() => dispatch({ new: -1, retired: 1 })}>
+    <button type="button" onClick={() => dispatch({ new: -1, paused: 1 })}>
       move
     </button>
   );
@@ -34,7 +34,7 @@ function DispatchProbe({ onRender }: { onRender: () => void }) {
 describe("ListSession", () => {
   it("renders server counts plus this session's deltas", () => {
     render(
-      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 1 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, paused: 1 }}>
         <NavPendingProvider>
           <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
@@ -49,14 +49,14 @@ describe("ListSession", () => {
     fireEvent.click(screen.getByRole("button", { name: "move" }));
 
     expect(screen.getByText("New").textContent).toContain("2");
-    expect(screen.getByText("Retired").textContent).toContain("2");
+    expect(screen.getByText("Paused").textContent).toContain("2");
   });
 
   it("does not re-render dispatch-only consumers when the counts change", () => {
     const onRender = vi.fn();
 
     render(
-      <ListSession counts={{ new: 3, learning: 0, mature: 0, retired: 1 }}>
+      <ListSession counts={{ new: 3, learning: 0, mature: 0, paused: 1 }}>
         <NavPendingProvider>
           <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>
@@ -75,7 +75,7 @@ describe("ListSession", () => {
 
   it("drops pending deltas when the key changes", () => {
     const session = (key: string) => (
-      <ListSession key={key} counts={{ new: 3, learning: 0, mature: 0, retired: 1 }}>
+      <ListSession key={key} counts={{ new: 3, learning: 0, mature: 0, paused: 1 }}>
         <NavPendingProvider>
           <ListFilterTabs filter="new" perPage={20} />
         </NavPendingProvider>

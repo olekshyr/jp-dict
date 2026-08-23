@@ -6,18 +6,28 @@ import { db } from "@/lib/db/client";
 import { entrySearch, furigana, users, userWords } from "@/lib/db/schema";
 import type { RubySegment } from "@/lib/db/schema";
 import {
+  ALL,
+  BUCKET,
   isListFilter,
   MATURE_DAYS,
+  PAUSED,
   type Bucket,
   type Counts,
+  type FilterValue,
   type ListFilter,
   type Previews,
 } from "@/lib/srs/grades";
 import type { HourBucket } from "@/lib/srs/forecast";
 import { bucketOf, preview } from "@/lib/srs/scheduler";
 import { requireUserId } from "./auth";
+import {
+  DEFAULT_FRONT_MODE,
+  isFrontMode,
+  type FrontMode,
+} from "./front-mode";
+import { STATUS, type WordStatus } from "./status";
 
-export type WordStatus = "todo" | "learned";
+export type { WordStatus };
 
 /**
  * Which bucket a row falls in, in SQL.
@@ -28,11 +38,11 @@ export type WordStatus = "todo" | "learned";
  * in lib/srs/scheduler.test.ts and by `MATURE_DAYS` being the only threshold.
  */
 const bucketSql = sql<ListFilter>`case
-    when ${userWords.status} = 'learned' then 'retired'
-    when ${userWords.state} = 0 then 'new'
+    when ${userWords.status} = ${STATUS.paused} then ${PAUSED}::text
+    when ${userWords.state} = 0 then ${BUCKET.new}::text
     when ${userWords.state} = 2
-      and coalesce(${userWords.intervalDays}, 0) >= ${MATURE_DAYS} then 'mature'
-    else 'learning'
+      and coalesce(${userWords.intervalDays}, 0) >= ${MATURE_DAYS} then ${BUCKET.mature}::text
+    else ${BUCKET.learning}::text
   end`;
 
 /** A row in the user's list. A DTO, not a table row — no SRS internals leak. */
@@ -44,9 +54,9 @@ export type SavedWord = {
   glossSummary: string;
   status: WordStatus;
   /*
-   * Always the schedule-derived bucket, never "retired" — retiring does not
+   * Always the schedule-derived bucket, never "paused" — pausing does not
    * touch the schedule, so this is the bucket the word returns to when it comes
-   * back. What the row *displays* is `status === "learned" ? "retired" : bucket`.
+   * back. What the row *displays* is `status === STATUS.paused ? PAUSED : bucket`.
    */
   bucket: Bucket;
   note: string | null;
@@ -64,18 +74,7 @@ export type Card = {
   previews: Previews;
 };
 
-export type FrontMode = "kanji" | "furigana" | "romaji" | "english";
-
-const FRONT_MODES: readonly FrontMode[] = [
-  "kanji",
-  "furigana",
-  "romaji",
-  "english",
-];
-
-export function isFrontMode(value: string): value is FrontMode {
-  return (FRONT_MODES as readonly string[]).includes(value);
-}
+export type { FrontMode };
 
 /**
  * One page of the signed-in user's saved words, newest first.
@@ -88,7 +87,7 @@ export function isFrontMode(value: string): value is FrontMode {
  * would add invalidation complexity for a near-zero hit rate.
  */
 export async function getMyWords(
-  filter: ListFilter | "all",
+  filter: FilterValue,
   limit: number,
   offset: number,
 ): Promise<SavedWord[]> {
@@ -109,7 +108,7 @@ export async function getMyWords(
     .from(userWords)
     .innerJoin(entrySearch, eq(entrySearch.entryId, userWords.entryId))
     .where(
-      filter === "all"
+      filter === ALL
         ? eq(userWords.userId, userId)
         : and(eq(userWords.userId, userId), sql`${bucketSql} = ${filter}`),
     )
@@ -149,7 +148,7 @@ export async function getMyWordCounts(): Promise<Counts> {
      */
     .groupBy(sql`1`);
 
-  const counts: Counts = { new: 0, learning: 0, mature: 0, retired: 0 };
+  const counts: Counts = { new: 0, learning: 0, mature: 0, paused: 0 };
   for (const row of rows) {
     if (isListFilter(row.bucket)) counts[row.bucket] = Number(row.count);
   }
@@ -240,7 +239,7 @@ export async function getReviewCards(): Promise<Card[]> {
     .where(
       and(
         eq(userWords.userId, userId),
-        eq(userWords.status, "todo"),
+        eq(userWords.status, STATUS.active),
         lte(userWords.dueAt, now),
       ),
     )
@@ -276,7 +275,7 @@ export async function getNextDueAt(): Promise<Date | null> {
   const [row] = await db
     .select({ dueAt: userWords.dueAt })
     .from(userWords)
-    .where(and(eq(userWords.userId, userId), eq(userWords.status, "todo")))
+    .where(and(eq(userWords.userId, userId), eq(userWords.status, STATUS.active)))
     .orderBy(asc(userWords.dueAt))
     .limit(1);
 
@@ -305,7 +304,7 @@ export async function getDueForecast(): Promise<HourBucket[]> {
     .where(
       and(
         eq(userWords.userId, userId),
-        eq(userWords.status, "todo"),
+        eq(userWords.status, STATUS.active),
         sql`${userWords.dueAt} < now() + interval '7 days'`,
       ),
     )
@@ -328,6 +327,6 @@ export async function getFrontMode(): Promise<FrontMode> {
     .where(eq(users.id, userId))
     .limit(1);
 
-  const mode = row?.frontMode ?? "kanji";
-  return isFrontMode(mode) ? mode : "kanji";
+  const mode = row?.frontMode ?? DEFAULT_FRONT_MODE;
+  return isFrontMode(mode) ? mode : DEFAULT_FRONT_MODE;
 }

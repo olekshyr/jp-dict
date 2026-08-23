@@ -5,13 +5,18 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { paginationHref } from "@/lib/pagination";
-import { FILTER_LABELS, LIST_FILTERS, type ListFilter } from "@/lib/srs/grades";
+import {
+  ALL,
+  FILTER_LABELS,
+  LIST_FILTERS,
+  type FilterValue,
+} from "@/lib/srs/grades";
 import { LinkPending } from "../link-pending";
 import { useListCounts } from "./list-session";
 
-const FILTERS: Array<{ value: ListFilter | "all"; label: string }> = [
+const FILTERS: Array<{ value: FilterValue; label: string }> = [
   ...LIST_FILTERS.map((value) => ({ value, label: FILTER_LABELS[value] })),
-  { value: "all" as const, label: "All" },
+  { value: ALL, label: "All" },
 ];
 
 /**
@@ -23,7 +28,7 @@ const FILTERS: Array<{ value: ListFilter | "all"; label: string }> = [
 export function ListFilterTabs({
   filter,
   perPage,
-}: Readonly<{ filter: ListFilter | "all"; perPage: number }>) {
+}: Readonly<{ filter: FilterValue; perPage: number }>) {
   const counts = useListCounts();
   const total = LIST_FILTERS.reduce((sum, key) => sum + counts[key], 0);
 
@@ -41,7 +46,7 @@ export function ListFilterTabs({
       */}
       <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none] sm:overflow-x-visible [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => {
-          const count = f.value === "all" ? total : counts[f.value];
+          const count = f.value === ALL ? total : counts[f.value];
           const isActive = filter === f.value;
           return (
             <TabsTrigger

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, useReducer } from "react";
 
-import { LIST_FILTERS, type Counts } from "@/lib/srs/grades";
+import { LIST_FILTERS, PAUSED, type Counts } from "@/lib/srs/grades";
 
 export type { Counts };
 
@@ -17,7 +17,7 @@ export type { Counts };
  */
 export type CountDelta = Partial<Counts>;
 
-const ZERO: Counts = { new: 0, learning: 0, mature: 0, retired: 0 };
+const ZERO: Counts = { new: 0, learning: 0, mature: 0, [PAUSED]: 0 };
 
 export function negate(delta: CountDelta): CountDelta {
   const out: CountDelta = {};

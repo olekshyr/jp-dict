@@ -7,6 +7,7 @@ import {
 } from "ts-fsrs";
 
 import {
+  BUCKET,
   formatInterval,
   MATURE_DAYS,
   type Bucket,
@@ -128,9 +129,9 @@ export function preview(row: SchedulingState, now: Date): Previews {
 }
 
 export function bucketOf(row: Pick<SchedulingState, "state" | "intervalDays">): Bucket {
-  if (row.state === State.New) return "new";
+  if (row.state === State.New) return BUCKET.new;
   if (row.state === State.Review && (row.intervalDays ?? 0) >= MATURE_DAYS) {
-    return "mature";
+    return BUCKET.mature;
   }
-  return "learning";
+  return BUCKET.learning;
 }

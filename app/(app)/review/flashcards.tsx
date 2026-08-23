@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/empty";
 import { CheckCheckIcon } from "lucide-react";
 import { GRADES, GRADE_LABELS, type Grade } from "@/lib/srs/grades";
-import type { Card, FrontMode } from "@/lib/user-words/queries";
+import { FRONT_MODE, type FrontMode } from "@/lib/user-words/front-mode";
+import type { Card } from "@/lib/user-words/queries";
 import type { RubySegment } from "@/lib/db/schema";
 import { FrontModeTabs } from "./front-mode-tabs";
 
@@ -36,28 +37,26 @@ function Ruby({ segments, fallback }: Readonly<{ segments: RubySegment[] | null;
   );
 }
 
-/** What shows on the front of the card, given the chosen mode. */
 function Front({ card, mode }: Readonly<{ card: Card; mode: FrontMode }>) {
   switch (mode) {
-    case "furigana":
+    case FRONT_MODE.furigana:
       return (
         <span className="text-5xl leading-relaxed">
           <Ruby segments={card.ruby} fallback={card.headword} />
         </span>
       );
-    case "romaji":
+    case FRONT_MODE.romaji:
       return <span className="font-mono text-4xl">{card.romaji}</span>;
-    case "english":
+    case FRONT_MODE.english:
       return <span className="text-2xl">{card.glosses}</span>;
-    case "kanji":
+    case FRONT_MODE.kanji:
     default:
       return <span className="text-6xl">{card.headword}</span>;
   }
 }
 
-/** The reverse of whatever the front showed. */
 function Back({ card, mode }: Readonly<{ card: Card; mode: FrontMode }>) {
-  if (mode === "english") {
+  if (mode === FRONT_MODE.english) {
     return (
       <div className="space-y-2 text-center">
         <div className="text-5xl">{card.headword}</div>

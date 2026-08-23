@@ -145,12 +145,48 @@ threat model: `docs/superpowers/specs/2026-08-03-auth-guard-dictionary-queries-d
   a user's own history; nothing writes to it but `gradeCard`, and nothing reads
   it yet. Design and rationale:
   `docs/superpowers/specs/2026-08-20-fsrs-scheduling-design.md`.
-- **`status` is a retire flag, not a lifecycle.** A word never "becomes
+- **`status` is a pause flag, not a lifecycle.** A word never "becomes
   learned" under FSRS — it earns longer intervals. `/list`'s New / Learning /
   Mature buckets are derived from `state` and `interval_days`, in two places
   that must agree: `bucketOf` in `lib/srs/scheduler.ts` and the `CASE` in
   `lib/user-words/queries.ts`. The duplication is deliberate — filtering and
   counting have to happen in SQL — and `MATURE_DAYS` is the only threshold.
+- **The pause vocabulary is "paused" everywhere except the column.** The
+  fourth `/list` filter is `paused` (`?filter=paused`), its tab reads "Paused"
+  and the row button toggles "Pause reviews" / "Resume reviews" — named for
+  what `setStatus` does, which is freeze the schedule and later resume it,
+  not declare the word finished. "Retired" was the old wording and read as
+  too final; "Learned" was rejected because it would sit beside the Learning
+  tab and re-assert the very claim FSRS drops. The stored values stay
+  `'todo'` / `'learned'` — renaming them is a migration and nothing
+  user-facing reads them. The filter key is written once, as `PAUSED` in
+  `lib/srs/grades.ts`; source imports it, and the `CASE` in
+  `lib/user-words/queries.ts` binds it as a parameter with an explicit
+  `::text` so its type is never inferred from the surrounding branches.
+  Tests keep the bare literal on purpose — a fixture spelling out
+  `?filter=paused` is what pins the URL against an accidental rename.
+  The 2026-08-20 FSRS spec still says "retired"
+  throughout; it is a dated record, not a correction target.
+- **Each stored vocabulary is declared once, as a `const` object.** `BUCKET`,
+  `PAUSED` and `ALL` in `lib/srs/grades.ts`; `STATUS` in
+  `lib/user-words/status.ts`; `FRONT_MODE` in `lib/user-words/front-mode.ts`;
+  `TERM_TYPE` beside its column in `lib/db/schema.ts`; `SCRIPT` in
+  `lib/dictionary/query-script.ts`. Types derive from the objects rather than
+  restating the union, so adding a value cannot leave a `z.enum`, a tab list
+  or a `CASE` behind.
+
+  Status and front mode get their own tiny modules for one reason: client
+  components need the values at runtime, and both `lib/user-words/queries.ts`
+  (`server-only`) and `lib/db/schema.ts` (drags in `drizzle-orm/pg-core`)
+  would poison the bundle. `TERM_TYPE` has no client consumer, so it stays
+  next to the column it describes.
+
+  Deliberately still literals: object keys already checked against a
+  `Record<…>` (`GRADE_LABELS`, `RATING` in `scheduler.ts`) — a rename there is
+  a type error, not a silent miss; the `unstable_instant` samples and the test
+  fixtures, which pin URL vocabulary and should fail loudly; and the
+  `term_type` strings in `scripts/`, which live in hand-written SQL that a
+  rename would not fix anyway — that one needs a re-import, not a migration.
 - The app uses the neon-http driver (one HTTP request per statement); the
   importer uses a plain `pg` TCP connection and a direct (unpooled) URL.
 - `data/` (60 MB `JMdict_e.xml`, 33 MB `JmdictFurigana.json`) is gitignored and

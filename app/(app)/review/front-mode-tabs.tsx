@@ -1,14 +1,16 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { FrontMode } from "@/lib/user-words/queries";
+import {
+  FRONT_MODE_LABELS,
+  FRONT_MODES,
+  type FrontMode,
+} from "@/lib/user-words/front-mode";
 
-const MODES: Array<{ value: FrontMode; label: string }> = [
-  { value: "kanji", label: "Kanji" },
-  { value: "furigana", label: "Furigana" },
-  { value: "romaji", label: "Romaji" },
-  { value: "english", label: "English" },
-];
+const MODES = FRONT_MODES.map((value) => ({
+  value,
+  label: FRONT_MODE_LABELS[value],
+}));
 
 /**
  * Picks what shows on the front of a card.

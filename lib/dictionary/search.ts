@@ -2,12 +2,14 @@ import { sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/lib/db/client";
+import { TERM_TYPE } from "@/lib/db/schema";
 import {
   clampQuery,
   detectScript,
   escapeLikePrefix,
   normalizeJapanese,
   normalizeRomaji,
+  SCRIPT,
 } from "./query-script";
 
 /** A single row in the search results list. */
@@ -27,8 +29,14 @@ export type SearchPage = {
 };
 
 /** `search_terms.term_type` values each script may match against. */
-const JAPANESE_TERMS = ["kanji", "kana"] as const;
-const LATIN_TERMS = ["romaji"] as const;
+const JAPANESE_TERMS = [TERM_TYPE.kanji, TERM_TYPE.kana] as const;
+const LATIN_TERMS = [TERM_TYPE.romaji] as const;
+
+const termTypeList = (types: readonly string[]) =>
+  sql.join(
+    types.map((t) => sql`${t}`),
+    sql`, `,
+  );
 
 const EMPTY: SearchPage = { results: [], total: 0 };
 
@@ -119,11 +127,11 @@ async function searchClamped(
   cacheTag("dictionary");
 
   const script = detectScript(rawQuery);
-  if (script === "empty") return EMPTY;
+  if (script === SCRIPT.empty) return EMPTY;
 
   const offset = (page - 1) * perPage;
 
-  if (script === "japanese") {
+  if (script === SCRIPT.japanese) {
     const term = normalizeJapanese(rawQuery);
     return pageWithFallback(
       (limit, from) => japaneseMatches(term, limit, from),
@@ -208,7 +216,7 @@ async function japaneseMatches(
     FROM search_terms st
     JOIN entry_search es ON es.entry_id = st.entry_id
     WHERE st.term LIKE ${prefix} ESCAPE '\\'
-      AND st.term_type IN ('kanji', 'kana')
+      AND st.term_type IN (${termTypeList(JAPANESE_TERMS)})
     GROUP BY es.entry_id, es.headword, es.reading, es.romaji,
              es.gloss_summary, es.is_common, es.freq_rank
     ORDER BY
@@ -247,7 +255,7 @@ async function latinMatches(
       SELECT DISTINCT st.entry_id, 0 AS source
       FROM search_terms st
       WHERE st.term = ${romaji}
-        AND st.term_type = 'romaji'
+        AND st.term_type = ${TERM_TYPE.romaji}
     ),
     gloss_hits AS (
       SELECT es.entry_id, 1 AS source
@@ -306,10 +314,7 @@ async function fuzzyMatches(
   // must be serializable. Drizzle spreads an interpolated array into one
   // placeholder per element rather than binding it as a Postgres array, so
   // build the IN list explicitly.
-  const typeList = sql.join(
-    types.map((t) => sql`${t}`),
-    sql`, `,
-  );
+  const typeList = termTypeList(types);
 
   const rows = await db.execute<SearchRow>(sql`
     SELECT
