@@ -333,6 +333,26 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   already answered this session whose new due date has not passed. Client state
   seeded from a prop like that must own the value and ignore later props; see
   `app/(app)/review/flashcards.tsx`.
+- **`request_retention` is the pacing dial, and 0.95 is a tuned value, not a
+  default.** Every FSRS interval is "days until recall probability decays to
+  this", so the one number sets the whole curve. At the 0.9 library default an
+  always-Good word went 3d, 14d, 57d, 196d, 586d — correct for the model's own
+  target and wrong for this app, where the jumps outran the sense that the word
+  was secure. 0.95 gives 3d, 6d, 15d, 34d, 72d, 143d for roughly twice the
+  daily reviews. Do not push it higher without a reason: workload climbs far
+  faster than retention above 0.95, and 0.97 collapses always-Hard to a card
+  that never leaves 2–3 days.
+
+  `maximum_interval: 365` is a separate, blunter guarantee — no saved word goes
+  more than a year without resurfacing. It does not shape the early curve and
+  is not a substitute for retention.
+
+  Both are global constants in `lib/srs/scheduler.ts`. Changing either moves no
+  existing `due_at`: a row picks up the new schedule on its next grade, so the
+  deck migrates gradually rather than in one lurch. That is what makes retuning
+  cheap, and it is why there is no backfill migration to write. `preview`'s
+  fixture in `lib/srs/scheduler.test.ts` pins the fresh-card labels, so a
+  retune is a test change too.
 - **`enable_short_term: false` and `interval_days integer` are one decision,
   not two.** With short-term steps on, FSRS answers a failed card in minutes;
   that rounds to a 0-day interval and a `due_at` in the past, and the card is

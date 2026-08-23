@@ -114,7 +114,7 @@ describe("preview", () => {
       again: "1d",
       hard: "2d",
       good: "3d",
-      easy: "8d",
+      easy: "4d",
     });
   });
 

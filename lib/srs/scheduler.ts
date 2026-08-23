@@ -28,8 +28,19 @@ const RATING: Record<Grade, Rating.Again | Rating.Hard | Rating.Good | Rating.Ea
  * integer column — there is nowhere to put "10 minutes". The same-session retry
  * lives in the client deck instead (app/(app)/review/flashcards.tsx), so every
  * interval that reaches the database is a whole number of days.
+ *
+ * Desired retention is the dial on how often a word comes back. FSRS defaults
+ * to 0.9, which put an always-Good word at 3d, 14d, 57d, 196d; 0.95 gives
+ * 3d, 6d, 15d, 34d for roughly twice the daily reviews. The cap is a floor on
+ * how often a word is seen at all, not a schedule.
  */
-const scheduler = fsrs(generatorParameters({ enable_short_term: false }));
+const scheduler = fsrs(
+  generatorParameters({
+    enable_short_term: false,
+    request_retention: 0.95,
+    maximum_interval: 365,
+  }),
+);
 
 /** The scheduling columns of a `user_words` row, and nothing else. */
 export type SchedulingState = {
