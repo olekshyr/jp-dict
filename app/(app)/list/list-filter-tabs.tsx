@@ -56,9 +56,11 @@ export function ListFilterTabs({
               // The tab is an anchor, not a <button>; without this Base UI
               // warns that it is stripping native button semantics.
               nativeButton={false}
-              // Chromium-only, and free where unsupported: opens the strip
-              // scrolled to the active filter instead of at "New".
-              className={isActive ? "[scroll-initial-target:nearest]" : ""}
+              // Scoped to the widths where the strip clips: above sm it is no
+              // scroll container, so this would scroll the page instead.
+              className={
+                isActive ? "max-sm:[scroll-initial-target:nearest]" : ""
+              }
               // Carries the chosen page size and the active search across tabs
               // but deliberately not the page: a different filter is a
               // different list, so it starts at the top.
