@@ -368,7 +368,52 @@ export const reviewLog = pgTable(
   ],
 );
 
+/**
+ * A grammar rule the user wrote for themselves: a title and a free-form body.
+ *
+ * `user_id` is not a foreign key to `users`, for the same reason
+ * `user_words.user_id` isn't one — and nothing here needs a `users` row at all,
+ * so `createRule` skips the lazy upsert the word actions do.
+ */
+export const grammarRules = pgTable(
+  "grammar_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    /*
+     * Sanitized HTML from the editor — the one place this app stores markup
+     * rather than text. `sanitizeBody` in lib/grammar/sanitize.ts is the
+     * control, applied in the Server Action, because that is the boundary a
+     * direct POST also has to cross.
+     */
+    body: text("body").notNull().default(""),
+    /*
+     * The same body as plain text, written by the same pass rather than derived
+     * on read: both consumers need it in SQL. The list projects
+     * `left(body_text, 300)` so a long rule doesn't ship in full for every row,
+     * and `?q` matches it with ILIKE.
+     */
+    bodyText: text("body_text").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  /*
+   * Serves the predicate and the ORDER BY together. `id` is the tiebreak:
+   * `created_at` ties are vanishingly unlikely, but a LIMIT/OFFSET list without
+   * a total order is exactly how pages come to repeat and skip rows.
+   */
+  (t) => [
+    index("grammar_rules_user_idx").on(t.userId, t.createdAt.desc(), t.id),
+  ],
+);
+
 export type Entry = typeof entries.$inferSelect;
 export type UserWord = typeof userWords.$inferSelect;
 export type ReviewLogRow = typeof reviewLog.$inferSelect;
 export type EntrySearchRow = typeof entrySearch.$inferSelect;
+export type GrammarRuleRow = typeof grammarRules.$inferSelect;

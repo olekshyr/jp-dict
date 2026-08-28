@@ -7,7 +7,7 @@ import { db } from "@/lib/db/client";
 import { reviewLog, users, userWords } from "@/lib/db/schema";
 import { GRADES, type Previews } from "@/lib/srs/grades";
 import { schedule } from "@/lib/srs/scheduler";
-import { requireUserId } from "@/lib/user-words/auth";
+import { requireUserId } from "@/lib/auth";
 import { FRONT_MODES } from "@/lib/user-words/front-mode";
 import { STATUS } from "@/lib/user-words/status";
 

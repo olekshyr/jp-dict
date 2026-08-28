@@ -43,6 +43,13 @@
       "when": 1787237878855,
       "tag": "0005_late_bloodscream",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787830592820,
+      "tag": "0006_lazy_the_hand",
+      "breakpoints": true
     }
   ]
 }

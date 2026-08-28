@@ -54,9 +54,15 @@ export default defineConfig({
         // docs point at E2E instead.
         "app/**/{page,layout,template,loading,error,not-found}.tsx",
         "app/actions/**",
+        // Browser-only vendor wrapper: CKEditor reads window at module load, so
+        // it cannot be imported under jsdom at all. lib/grammar/sanitize.ts is
+        // deliberately NOT excluded — it is the piece that has to be tested.
+        "app/(app)/grammar/ckeditor-client.tsx",
         // Request-time or DB-bound, and `use cache` is compiled by Next's SWC
         // plugin rather than Vite.
         "lib/db/**",
+        "lib/auth.ts",
+        "lib/grammar/queries.ts",
         "lib/user-words/**",
         "lib/dictionary/{search,entry}.ts",
         // Generated from JMdict by scripts/gen-tags.ts.

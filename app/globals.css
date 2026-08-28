@@ -165,3 +165,91 @@
     }
   }
 }
+
+/*
+ * CKEditor ships its own palette and would otherwise render a white slab in
+ * dark mode. Only the variables that actually surface are mapped; the editor
+ * has dozens, and restating them all would be a second theme to maintain.
+ *
+ * `.ck-body-wrapper` is in the selector because CKEditor portals its balloons —
+ * the link form, every dropdown panel — straight onto `document.body`
+ * (`BodyCollection.attachToDom`), outside this subtree entirely. Without it the
+ * link balloon opens as the stock white slab this block exists to prevent,
+ * floating over a dark editor.
+ *
+ * Typography is deliberately NOT mapped onto typeset here. CKEditor's own
+ * `.ck-content` rules are element-qualified and outrank typeset's `:where()`
+ * (zero-specificity) ones, so the two would interleave unpredictably and the
+ * result would drift on every CKEditor upgrade. The editor keeps its own
+ * content styles; the read view gets typeset. Bold is bold and a list is a list
+ * in both, which is what the user is actually checking while typing.
+ */
+.rule-editor,
+.ck-body-wrapper {
+  --ck-color-base-background: var(--background);
+  --ck-color-base-foreground: var(--muted);
+  --ck-color-base-border: var(--border);
+  --ck-color-base-text: var(--foreground);
+  --ck-color-text: var(--foreground);
+  --ck-color-toolbar-background: var(--muted);
+  --ck-color-toolbar-border: var(--border);
+  --ck-color-button-default-background: transparent;
+  --ck-color-button-default-hover-background: var(--accent);
+  --ck-color-button-default-active-background: var(--accent);
+  --ck-color-button-on-background: var(--accent);
+  --ck-color-button-on-hover-background: var(--accent);
+  --ck-color-button-on-color: var(--accent-foreground);
+  --ck-color-focus-border: var(--ring);
+  --ck-color-dropdown-panel-background: var(--popover);
+  --ck-color-dropdown-panel-border: var(--border);
+  --ck-color-panel-background: var(--popover);
+  --ck-color-panel-border: var(--border);
+  --ck-color-list-background: var(--popover);
+  --ck-color-list-button-hover-background: var(--accent);
+  --ck-color-list-button-on-background: var(--accent);
+  --ck-color-list-button-on-text: var(--accent-foreground);
+  --ck-color-input-background: var(--background);
+  --ck-color-input-border: var(--border);
+  --ck-color-input-text: var(--foreground);
+  --ck-border-radius: var(--radius);
+
+  /*
+   * The editable area's own family, separate from the --ck-color-* set above
+   * and the reason the first attempt left dark text on a dark background:
+   * `.ck-content` takes its colour from --ck-content-font-color, which defaults
+   * to #000 and is untouched by any --ck-color-* mapping.
+   * --ck-content-list-marker-color derives from it, so bullets follow.
+   */
+  --ck-content-font-color: var(--foreground);
+  /*
+   * CKEditor hardcodes Helvetica/Arial/Tahoma/Verdana here — a stack with no
+   * Japanese tail at all, in the one field of this app most likely to hold
+   * kana and kanji. See "The sans stack must keep its Japanese tail" in
+   * AGENTS.md: without this, Japanese typed into the editor falls to the
+   * browser's last-resort face and renders as MS PGothic on Windows.
+   */
+  --ck-content-font-family: inherit;
+}
+
+/*
+ * Two rules the variables cannot reach, because CKEditor hardcodes the colours.
+ * Both are tags the toolbar or a paste can actually produce, so both would
+ * otherwise sit wrong against a dark background.
+ */
+.rule-editor .ck-content blockquote {
+  border-left-color: var(--border);
+}
+
+.rule-editor .ck-content pre {
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+/* Layout only. Typography stays CKEditor's — see the note above. */
+.rule-editor .ck-editor__editable {
+  min-height: 16rem;
+}
+
+.rule-editor .ck-editor__editable_inline {
+  padding: 0.75rem 1rem;
+}

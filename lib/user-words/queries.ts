@@ -34,7 +34,7 @@ import {
 } from "@/lib/srs/grades";
 import type { HourBucket } from "@/lib/srs/forecast";
 import { bucketOf, preview } from "@/lib/srs/scheduler";
-import { requireUserId } from "./auth";
+import { requireUserId } from "@/lib/auth";
 import {
   DEFAULT_FRONT_MODE,
   isFrontMode,

@@ -41,14 +41,16 @@ is done. The suite is unit-only and runs in a few seconds — see [Testing](#tes
 app/
   layout.tsx           root: fonts, ClerkProvider (inside <body>), theme script, <Toaster/>
   (app)/               signed-in area — nav chrome + AuthGate
-    search/ list/ review/ entry/[id]/
+    search/ list/ review/ entry/[id]/ grammar/
     *.tsx              route-local components, colocated
-  actions/words.ts     all Server Actions
+  actions/             words.ts + grammar.ts — all Server Actions
 components/ui/         shadcn primitives (Base UI under the hood)
 lib/
+  auth.ts              requireUserId() — every per-user read and write calls it
   db/                  schema.ts + client.ts — the only place DATABASE_URL is read
   dictionary/          search, entry lookup, script detection, JMdict tag names
   user-words/          per-user reads/writes; each function calls auth() itself
+  grammar/             per-user grammar rules + the body sanitizer
   srs/                 grades.ts (client-safe vocabulary) + scheduler.ts (FSRS)
   pagination.ts        pure URL-state helpers, shared server + client
 scripts/               JMdict importer and verification, run locally only
@@ -80,9 +82,11 @@ flag and dims what is about to be replaced.
 
 **Authorization lives in the data layer.** `proxy.ts` (Next 16's renamed
 `middleware`) runs `clerkMiddleware()` and protects nothing — it can be
-CDN-bypassed. Every function in `lib/user-words/` and every Server Action calls
-`requireUserId()` itself and takes no `userId` parameter, so a caller physically
-cannot pass someone else's id. Keep it that way.
+CDN-bypassed. Every function in `lib/user-words/` and `lib/grammar/`, and every
+Server Action, calls `requireUserId()` (`lib/auth.ts`) itself and takes no
+`userId` parameter, so a caller physically cannot pass someone else's id. Every
+write is additionally scoped by `user_id` in its `WHERE`, so a guessed row id
+matches nothing. Keep it that way.
 
 The dictionary functions themselves stay user-blind — no `requireUserId()`,
 deliberately, since their results are identical for every user and that is
@@ -204,6 +208,17 @@ threat model: `docs/superpowers/specs/2026-08-03-auth-guard-dictionary-queries-d
   pagination and the page clamp read. Counting the whole library while listing
   matches would put the badges, the row count and the page links into three-way
   disagreement.
+- **`grammar_rules` is a second user domain, not an extension of the first.** No
+  `entry_id`, no schedule, no `users` row — `user_id` is not a foreign key, for
+  the same reason `user_words.user_id` isn't one, and nothing a rule needs lives
+  in `users`, so `createRule` skips the lazy upsert the word actions do. Rows are
+  ordered `created_at DESC, id`; the `id` tiebreak is the same total-order rule
+  the search `ORDER BY` gotcha below states, and editing deliberately does not
+  reorder the list. `/grammar`'s `?q` is a plain `ILIKE` over `title` and
+  `body_text` — deliberately *not* routed through `detectScript` /
+  `normalizeJapanese` / `normalizeRomaji` the way `/list`'s is, because those
+  exist to reach the dictionary's `search_terms` index and there is no
+  dictionary here. `ILIKE` is a no-op lowercase for kana and kanji.
 - The app uses the neon-http driver (one HTTP request per statement); the
   importer uses a plain `pg` TCP connection and a direct (unpooled) URL.
 - `data/` (60 MB `JMdict_e.xml`, 33 MB `JmdictFurigana.json`) is gitignored and
@@ -237,6 +252,23 @@ stubs four modules globally:
 - `next/link` — the real one wants an app-router context that does not exist
   under Vitest. A plain anchor loses nothing, since every assertion is on `href`.
 - `lucide-react` — the barrel evaluates the whole icon set per test file.
+- `@/app/actions/grammar` — same reason as the words actions. Its stubs return
+  a body *different* from any input, because what `RuleView` must adopt is the
+  action's sanitized answer, not the editor's HTML — a stub echoing its input
+  would hide the bug. Note the id in that factory is a literal: `vi.mock`
+  factories are hoisted, so anything they close over is still in its TDZ.
+
+`RichTextEditor` is mocked per-file, not globally, by the two tests that reach
+it — a textarea standing in for the seam. That keeps CKEditor out of the run
+and pins the `{ initialValue, onChange }` contract at the same time.
+
+**An `AnimatePresence` row does not leave the DOM on the tick you remove it.**
+`setRemoved(true)` starts a 150ms exit and the node stays mounted throughout, so
+a `queryByText` right after `act()` cannot tell a still-exiting row from one that
+was never removed. What discriminates them is whether the exit *completes*:
+assert with `waitForElementToBeRemoved`, and assert a rollback by requiring that
+same call to time out. `list-row.test.tsx` works this out at length;
+`rule-row.test.tsx` follows it, and both were mutation-tested by hand.
 
 Everything actually under test stays real: `@base-ui/react`, `wanakana`,
 `lib/pagination.ts`, `clsx`/`tailwind-merge`. Pure-logic tests open with
@@ -438,12 +470,115 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   manager. For the same reason, a value the blur handler reads has to be
   mirrored into a ref — Escape blurs the field in the very event that reverts
   it, before React has applied the state.
-- **User-authored text is rendered as a React text child, never as HTML.**
-  `user_words.note` is the only free-form text the app stores. Rendering
-  newlines wants `whitespace-pre-wrap`, not `dangerouslySetInnerHTML`;
-  truncation wants `line-clamp`, not a slice that can split a surrogate pair.
-  The 2000-character cap in `noteSchema` is the control — a Server Action is
-  reachable by direct POST, so the textarea's `maxLength` is only a courtesy.
+- **User-authored *plain* text is rendered as a React text child, never as
+  HTML.** `user_words.note` and `grammar_rules.title` are plain text and stay
+  that way. Rendering newlines wants `whitespace-pre-wrap`, not
+  `dangerouslySetInnerHTML`; truncation wants `line-clamp`, not a slice that can
+  split a surrogate pair. The 2000-character cap in `noteSchema` is the control
+  — a Server Action is reachable by direct POST, so the textarea's `maxLength`
+  is only a courtesy.
+
+  **`grammar_rules.body` is the one exception, and it is sanitized, not
+  trusted.** A WYSIWYG emits HTML; there is no version of that field that is a
+  text child. So the trust boundary is the write, not the render:
+  `sanitizeBody` in `lib/grammar/sanitize.ts` runs inside the Server Action —
+  the same place `noteSchema`'s cap runs, and for the same reason — and only
+  what it returns ever reaches the column. `RuleBody` then injects that stored
+  string. Nothing may write to `body` without going through `sanitizeBody`, and
+  nothing else in the app may use `dangerouslySetInnerHTML`.
+
+  Its `bodyText` twin is written by the same pass, from the already-sanitized
+  HTML, using the same parser rather than a regex strip — a regex that thinks
+  it understands HTML is how a bypass gets written by accident. It exists
+  because both the list excerpt (`left(body_text, 300)`) and `?q` need the text
+  in SQL.
+
+- **The editor toolbar and the sanitizer allowlist are one decision written
+  twice** — the same shape as `bucketOf` and the SQL `CASE`. A button added to
+  `app/(app)/grammar/ckeditor-client.tsx` whose tag is missing from
+  `ALLOWED_TAGS` does not fail: it silently discards the user's formatting on
+  save.
+
+  **And the tag a button produces is not the tag you would guess.** CKEditor's
+  Italic *downcasts* to `<i>` and only *upcasts* `<em>` — an allowlist holding
+  `em` alone dropped every italic, and the test missed it because its fixture
+  was hand-written `<em>` rather than what the editor emits. Read the plugin's
+  `view:` before adding a button; `sanitize.test.ts` now pins one real downcast
+  fixture per toolbar entry, which is the check that would have caught it.
+
+  There is deliberately no third copy in CSS. `RuleBody` renders through
+  shadcn/typeset (`app/typeset.css`, class `typeset typeset-docs`), which styles
+  every tag generically rather than by a list we maintain — so widening the
+  allowlist is two edits, not three. Hand-rolled rules were the first attempt and
+  were replaced: without them a stored tag falls back to the Tailwind preflight
+  reset, which strips headings and list markers down to body text, and keeping a
+  third list in step to prevent that is exactly the failure mode above.
+  `typeset-docs` in `app/globals.css` is the preset — it points
+  `--typeset-font-body` at `--sans`, which is what keeps the Japanese tail.
+
+- **CKEditor is client-only and must stay behind `rich-text-editor.tsx`.** It
+  reads browser globals at module load, so it is loaded through
+  `next/dynamic(..., { ssr: false })` — which can only be called from a client
+  component, which is the entire reason that wrapper file exists. Importing
+  `ckeditor5` from a server component, or from any module one reaches, breaks
+  the build. It is ~780 KB in its own chunk, absent from every entry chunk, and
+  reached only from `/grammar/new` and from clicking Edit.
+
+  `licenseKey: "GPL"` is required, not decorative: CKEditor 5 has demanded a
+  license key since v44 and refuses to start without one. That literal string is
+  what self-hosted open-source use takes.
+
+  The seam is `{ initialValue, onChange }` and it is deliberately uncontrolled.
+  Feeding the value back on every keystroke is what makes a rich-text field
+  fight the cursor; `initialValue` seeds it and the editor owns its content from
+  there, the same arrangement `SaveButton` and `Flashcards` use.
+
+- **CKEditor portals its balloons onto `document.body`.**
+  `BodyCollection.attachToDom` appends `.ck-body-wrapper` there, outside
+  whatever subtree you themed, so the link form and every dropdown panel miss a
+  scoped `--ck-color-*` block entirely and open as stock-light slabs over a dark
+  editor. `.ck-body-wrapper` is in the selector in `app/globals.css` for that
+  reason. Note also that the chrome and the content are two different variable
+  families: `--ck-color-*` themes the toolbar, `--ck-content-*` themes the
+  editable text — mapping only the first leaves black text on a dark background,
+  and `--ck-content-font-family` is a hardcoded Latin stack with no Japanese
+  tail.
+
+- **A validation rejection from a Server Action is indistinguishable from a
+  network failure by the time it reaches the browser.** A `ZodError` crossing
+  that boundary arrives as an opaque `Error`, so a single `catch` can only
+  honestly say "check your connection" — which for an over-cap body is both
+  wrong and unactionable, and repeats forever. Where a limit is something the
+  user can act on, check it client-side too and say so specifically. The server
+  cap stays the control; the client copy is the only place it is explainable.
+
+- **A write that sanitizes must return what it stored.** `createRule` and
+  `updateRule` hand back the sanitized body, and `RuleView` adopts *that* rather
+  than the HTML its editor produced. The two differ wherever the sanitizer
+  removed something, and since the actions do not refresh the route, keeping the
+  editor's version would mean the page silently changed on the next reload.
+
+- **A dynamic route needs a non-empty `generateStaticParams` under
+  `cacheComponents`.** `/grammar/[id]` has no real id to name — every rule is
+  private to one user — so it names a placeholder uuid. Without it the build
+  fails twice over: `EmptyGenerateStaticParamsError` if the array is empty, and
+  "Uncached data was accessed outside of `<Suspense>`" pointing at `NavLink` if
+  the export is missing entirely, because on a route with no known params
+  `usePathname()` is request data. `/entry/[id]` never hits this only because
+  its `generateStaticParams` names 200 real entries. The placeholder is honest
+  here because the shell is genuinely id-independent.
+
+- **Segment config exports are parsed statically, so they must be literals.**
+  `unstable_instant` built from a `const` declared in the same file fails the
+  build with "Invalid segment configuration export detected" — a message that
+  names no file and points at no line. Inline the value even when it duplicates
+  one right above it.
+
+- **`prefetch: "static"` is unusable under this layout.** It asserts the whole
+  page prerenders, and the `(app)` layout's `AuthGate` reads auth, so nothing
+  beneath it ever is. Every route that exports `unstable_instant` uses
+  `"runtime"`; a route that reads no params still needs one empty sample
+  (`samples: [{}]`).
 
 - **The sans stack must keep its Japanese tail.** `--sans` / `--mono` in
   `app/globals.css` end in real Japanese families because Inter and Geist Mono

@@ -45,6 +45,21 @@ vi.mock("@/app/actions/words", () => ({
   setFrontMode: vi.fn(async () => undefined),
 }));
 
+vi.mock("@/app/actions/grammar", () => ({
+  // Mocked here for the same reason as the words actions: "use server" plus
+  // lib/db/client.ts, which throws at module load without DATABASE_URL.
+  // The id is a literal, not a shared const: vi.mock factories are hoisted,
+  // so anything they close over is still in its temporal dead zone.
+  createRule: vi.fn(async () => ({
+    id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    body: "<p>saved</p>",
+  })),
+  // Returns the *sanitized* body, which is what RuleView is supposed to adopt
+  // over the raw editor output — a stub returning the input would hide that.
+  updateRule: vi.fn(async () => ({ body: "<p>saved</p>" })),
+  deleteRule: vi.fn(async () => undefined),
+}));
+
 vi.mock("next/navigation", async () => await import("./test/next-navigation"));
 
 vi.mock("next/link", async () => await import("./test/next-link"));

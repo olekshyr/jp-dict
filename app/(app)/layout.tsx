@@ -34,6 +34,7 @@ const navLinks = [
   { href: "/search", label: "Search" },
   { href: "/list", label: "My list" },
   { href: "/review", label: "Review" },
+  { href: "/grammar", label: "Grammar" },
 ];
 
 export default function AppLayout({
