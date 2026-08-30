@@ -1,3 +1,4 @@
+import { Activity } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -151,6 +152,73 @@ describe("RuleForm", () => {
     expect(add).toHaveBeenCalledWith(
       expect.objectContaining({ type: "error" }),
     );
+  });
+
+  describe("when the segment is restored from the router bfcache", () => {
+    const renderInActivity = (
+      props: React.ComponentProps<typeof RuleForm> = {},
+    ) => {
+      const tree = (mode: "visible" | "hidden") => (
+        <NavPendingProvider>
+          <Activity mode={mode}>
+            <RuleForm {...props} />
+          </Activity>
+        </NavPendingProvider>
+      );
+      const { rerender } = render(tree("visible"));
+      return async () => {
+        await act(async () => rerender(tree("hidden")));
+        await act(async () => rerender(tree("visible")));
+      };
+    };
+
+    it("clears a new-rule form", async () => {
+      const leaveAndReturn = renderInActivity();
+
+      type("Title", "〜てしまう");
+      type("Body", "<p>Completion</p>");
+      await leaveAndReturn();
+
+      expect(screen.getByLabelText("Title")).toHaveValue("");
+
+      type("Title", "〜ながら");
+      await submit();
+
+      expect(createRule).toHaveBeenCalledExactlyOnceWith("〜ながら", "");
+    });
+
+    it("re-seeds an edit form from the rule", async () => {
+      const leaveAndReturn = renderInActivity({
+        rule: { id: RULE_ID, title: "old", body: "<p>old</p>" },
+      });
+
+      type("Title", "draft");
+      type("Body", "<p>draft</p>");
+      await leaveAndReturn();
+
+      expect(screen.getByLabelText("Title")).toHaveValue("old");
+
+      await submit();
+
+      expect(updateRule).toHaveBeenCalledExactlyOnceWith(
+        RULE_ID,
+        "old",
+        "<p>old</p>",
+      );
+    });
+
+    it("drops a stale validation error", async () => {
+      const leaveAndReturn = renderInActivity();
+
+      await submit();
+      expect(screen.getByText("Give the rule a title.")).toBeInTheDocument();
+
+      await leaveAndReturn();
+
+      expect(
+        screen.queryByText("Give the rule a title."),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("says so when the rule was deleted from under the edit", async () => {

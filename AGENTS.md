@@ -317,6 +317,20 @@ growth triggers: `docs/superpowers/specs/2026-07-28-deploy-strategy-design.md`.
   an `<a href>` rendered through it — every pagination link, the "Back to my
   list" button — is announced as a button, not a link. Tests query those by
   text; `getByRole("link")` will not find them.
+- **Navigating away does not unmount the route.** Under `cacheComponents` Next
+  keeps the last three segments at each level of the tree mounted in a hidden
+  `<Activity>` (`MAX_BF_CACHE_ENTRIES` in `bfcache-state-manager`), so returning
+  to a route restores the subtree rather than rebuilding it. `<Activity>`
+  preserves state and DOM but tears effects down and re-runs them, and that
+  split is the hazard: anything living in an effect comes back rebuilt from its
+  props while uncontrolled DOM and refs come back holding the last visit's
+  values. `RuleForm` was the first casualty — a second "New rule" opened with
+  the previous rule's title in the input and its HTML in the `body` ref, while
+  CKEditor, destroyed on hide and re-created on show, showed empty. It re-seeds
+  from its props in an effect (`form.reset()` plus the ref) so all three agree;
+  the stale validation message clears from `onReset` rather than the effect
+  body, which `react-hooks/set-state-in-effect` rejects. Any uncontrolled form
+  outside a route that remounts needs the same treatment.
 - **A prop that seeds client state is not a live value.** `SaveButton`,
   `StatusButton` and `Flashcards` all seed from a server prop and then own it,
   because Server Actions no longer refresh the route. Reading the prop again

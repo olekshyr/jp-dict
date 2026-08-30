@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { createRule, updateRule } from "@/app/actions/grammar";
@@ -10,10 +10,6 @@ import { toast } from "@/components/ui/toast";
 import { useNavPending } from "../nav-pending";
 import { RichTextEditor } from "./rich-text-editor";
 
-/** Both match app/actions/grammar.ts. Those are the control; these save a
- * round-trip and, for the body, are the only place the limit is explainable —
- * a rejection from the action is indistinguishable from a network failure by
- * the time it reaches the browser. */
 const MAX_TITLE = 200;
 const MAX_BODY = 20_000;
 
@@ -23,18 +19,6 @@ const FAILED = {
   description: "Check your connection and try again.",
 } as const;
 
-/**
- * The create and edit form.
- *
- * Deliberately not optimistic, unlike every other write in this app: success
- * here is a navigation or a view swap, so there is nothing to show ahead of the
- * round-trip. `isPending` disabling the button is the honest feedback, and a
- * rejection leaves the form standing with the user's text still in it.
- *
- * Nothing the user types lives in state. The title is an uncontrolled input
- * read through FormData on submit, and the body sits in a ref — re-rendering a
- * mounted rich-text editor on every keystroke buys nothing and costs plenty.
- */
 export function RuleForm({
   rule,
   onSaved,
@@ -49,7 +33,13 @@ export function RuleForm({
   const { startNavigation } = useNavPending();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const form = useRef<HTMLFormElement>(null);
   const body = useRef(rule?.body ?? "");
+
+  useEffect(() => {
+    form.current?.reset();
+    body.current = rule?.body ?? "";
+  }, [rule?.body]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -94,7 +84,12 @@ export function RuleForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form
+      ref={form}
+      onSubmit={handleSubmit}
+      onReset={() => setError(null)}
+      className="flex flex-col gap-4"
+    >
       <div className="flex flex-col gap-1">
         <Input
           name="title"
